@@ -1,7 +1,7 @@
 import torch
 from torch.utils.checkpoint import checkpoint
 
-from tile_kernels.mhc.norm_fn_kernel import (
+from tilelang_kernels.norm_fn_kernel import (
     _mhc_fn_normw_merge_bwd,
     _mhc_fn_normw_merge_fwd,
     _mhc_pre_norm_fn_bwd_mul,

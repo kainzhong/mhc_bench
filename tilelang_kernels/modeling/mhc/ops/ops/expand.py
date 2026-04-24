@@ -1,6 +1,6 @@
 import torch
 
-from tile_kernels.mhc.expand_kernel import expand_to_mhc_bwd_tl, expand_to_mhc_fwd_tl
+from tilelang_kernels.expand_kernel import expand_to_mhc_bwd_tl, expand_to_mhc_fwd_tl
 
 
 class ExpandToMHCFn(torch.autograd.Function):

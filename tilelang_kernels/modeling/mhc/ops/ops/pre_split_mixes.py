@@ -1,7 +1,7 @@
 import torch
 
-from tile_kernels.config import get_num_sms
-from tile_kernels.mhc.pre_split_mixes_kernel import _mhc_pre_split_mixes_bwd, _mhc_pre_split_mixes_fwd
+from tilelang_kernels.config import get_num_sms
+from tilelang_kernels.pre_split_mixes_kernel import _mhc_pre_split_mixes_bwd, _mhc_pre_split_mixes_fwd
 
 
 class MHCPreSplitMixes(torch.autograd.Function):

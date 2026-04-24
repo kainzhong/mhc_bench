@@ -1,7 +1,7 @@
 import torch
 
-from tile_kernels.config import get_num_sms
-from tile_kernels.mhc.head_compute_mix_kernel import _mhc_head_compute_mix_bwd, _mhc_head_compute_mix_fwd
+from tilelang_kernels.config import get_num_sms
+from tilelang_kernels.head_compute_mix_kernel import _mhc_head_compute_mix_bwd, _mhc_head_compute_mix_fwd
 
 
 class MHCHeadComputeMix(torch.autograd.Function):

@@ -1,6 +1,6 @@
 import torch
 
-from tile_kernels.mhc.pre_apply_mix_kernel import _mhc_pre_apply_mix_bwd, _mhc_pre_apply_mix_fwd
+from tilelang_kernels.pre_apply_mix_kernel import _mhc_pre_apply_mix_bwd, _mhc_pre_apply_mix_fwd
 
 
 class MHCPreApplyMix(torch.autograd.Function):

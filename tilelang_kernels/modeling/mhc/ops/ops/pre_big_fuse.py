@@ -1,7 +1,7 @@
 import torch
 
-from tile_kernels.mhc.norm_fn_kernel import _mhc_pre_norm_fn_fwd_mul, round_to_tf32
-from tile_kernels.mhc.pre_big_fuse_kernel import _mhc_pre_big_fuse
+from tilelang_kernels.norm_fn_kernel import _mhc_pre_norm_fn_fwd_mul, round_to_tf32
+from tilelang_kernels.pre_big_fuse_kernel import _mhc_pre_big_fuse
 
 
 def mhc_pre_big_fuse(

@@ -1,6 +1,6 @@
 import torch
 
-from tile_kernels.mhc.post_kernel import mhc_post_bwd, mhc_post_fwd
+from tilelang_kernels.post_kernel import mhc_post_bwd, mhc_post_fwd
 
 
 class MHCPost(torch.autograd.Function):

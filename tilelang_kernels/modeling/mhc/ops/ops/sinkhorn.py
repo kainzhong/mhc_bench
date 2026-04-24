@@ -1,6 +1,6 @@
 import torch
 
-from tile_kernels.mhc.sinkhorn_kernel import _mhc_sinkhorn_bwd, _mhc_sinkhorn_fwd
+from tilelang_kernels.sinkhorn_kernel import _mhc_sinkhorn_bwd, _mhc_sinkhorn_fwd
 
 
 class _SinkhornNormalize(torch.autograd.Function):
