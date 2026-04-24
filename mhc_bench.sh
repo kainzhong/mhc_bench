@@ -85,15 +85,15 @@ for config in "${CONFIGS[@]}"; do
         --cuda-memory-usage=false \
         --cpuctxsw=none \
         --capture-range=cudaProfilerApi \
-        --capture-range-end=stop \
+        --capture-range-end=repeat \
         --stats=true \
         --force-overwrite=true \
         --output "$TMPBASE" \
         python "$BENCH" \
             --operation all \
             --B "$B" --T "$T" --C "$C" \
-            --warmup 3 \
-            --iters 1
+            --warmup 5 \
+            --iters 5
 
     # Clean up the artifacts we didn't ask for.
     rm -f "$TMPBASE.nsys-rep" "$TMPBASE.sqlite" "$TMPBASE.qdstrm"
