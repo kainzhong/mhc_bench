@@ -1,372 +1,412 @@
-# Triton vs. Tilelang mHC kernels — functional and optimization comparison
+# Triton vs. Tilelang mHC — wrapped API comparison
 
-## Overview
+Compares the two mHC (manifold Hyper-Connection) implementations at the
+`torch.autograd.Function`-backed wrapper layer each one exposes:
 
-The triton and tilelang kernel sets in this repo implement the **same five core
-operations** of the mHC (manifold Hyper-Connection) block. They do it with
-different algorithms, different fusion boundaries, and different optimization
-strategies — but at the mathematical level the operations are equivalent up to
-a handful of config knobs and one optional-`bias` flag. Tilelang additionally
-ships a couple of *bundling* kernels (big fused + multilayer recompute) and a
-couple of *specialized* kernels (entry-point broadcast, first-layer mix
-compute); these are performance/memory optimizations, not additional features.
+- Triton: `triton_kernels.mhc_ops`
+- Tilelang: `tilelang_kernels.modeling.mhc.ops.ops`
 
-## Kernel inventory — side by side
+## 1. Op inventory — what both sides ship vs. what only one side ships
 
-| Logical op           | Triton (`mhc_kernel.py`)                                    | Tilelang (`tilelang_kernels/…`)                          | Notes |
-| -------------------- | ----------------------------------------------------------- | -------------------------------------------------------- | --- |
-| Projection           | `_mhc_projection_fwd_fused` / `_bwd_fused`                  | `norm_fn_kernel._mhc_pre_norm_fn_fwd_mul` / `_fwd_norm`  | Triton stops at `x@Wᵀ` + `ms`. Tilelang fuses RMS. |
-| Scale (sigmoid/bias) | `_mhc_scale_fwd_fused` / `_bwd_fused`                       | `pre_split_mixes_kernel._mhc_pre_split_mixes_fwd` / `_bwd` | Same mapping H → (H_pre, H_post, H_res). |
-| Sinkhorn             | `_mhc_sinkhorn_fwd_fused[_recompute]` / `_bwd_fused[_recompute]` | `sinkhorn_kernel._mhc_sinkhorn_fwd` / `_bwd`         | Different algorithm, same fixed point. |
-| Aggregate            | `_mhc_aggregate_fwd` / `_bwd`                               | `pre_apply_mix_kernel._mhc_pre_apply_mix_fwd` / `_bwd`   | Same math. |
-| Expand-combine / Post| `_mhc_expand_combine_fwd` / `_bwd` (+ `_with_bias` variants)| `post_kernel.mhc_post_fwd` / `mhc_post_bwd`              | Same math; triton has `bias`, tilelang doesn't. |
-| *Entry broadcast*    | —                                                           | `expand_kernel.expand_to_mhc_fwd` / `_bwd`               | Tilelang-only op: `(s,b,h) → (s,b,n,h)`. |
-| *First-layer mix*    | —                                                           | `head_compute_mix_kernel._mhc_head_compute_mix_fwd` / `_bwd` | Specialization of scale — only produces `pre`. |
-| *Super-fused pre*    | —                                                           | `pre_big_fuse_kernel._mhc_pre_big_fuse`                  | One kernel = projection + split + sinkhorn + aggregate. |
-| *Grad checkpointing* | —                                                           | `multilayer_recompute_kernel.mhc_multilayer_recompute`   | Replays several mHC layers fused for bwd recompute. |
+| Logical op in an mHC block | Triton wrapper | Tilelang wrapper |
+| --- | --- | --- |
+| Projection (`x @ phi.T`, `ms = mean(x²)`) | `mhc_fused_projection` | `mhc_pre_norm_fn`\* |
+| RMS normalize (`· rsqrt(ms+eps)`) | fused into `mhc_fused_scale` | fused into `mhc_pre_norm_fn`\* |
+| Split + sigmoid + bias → `h_pre, h_post, h_res` | `mhc_fused_scale` | `mhc_pre_split_mixes` |
+| Sinkhorn (→ doubly-stochastic) | `mhc_fused_sinkhorn` | `sinkhorn_normalize` |
+| Aggregate `n` streams → 1 | `mhc_fused_aggregate` | `mhc_pre_apply_mix` |
+| Expand + combine (`f⊗H_post + x@H_res`) | `mhc_fused_expand_combine` | `mhc_post` |
+| First-layer partial scale (pre-mix only) | — | `mhc_head_compute_mix` |
+| `(s,b,h) → (s,b,n,h)` broadcast | — | `expand_to_mhc` |
+| Mega-fused "pre" path (4 ops in 1 kernel) | — | `mhc_pre_big_fuse` *(inference-only — no autograd backward)* |
+| Multi-layer replay for grad checkpointing | — | `mhc_multilayer_recompute` |
 
-The last four rows are **tilelang-only** — they fuse or specialize the core
-ops rather than adding new ones.
+\*`mhc_pre_norm_fn` = "projection + RMS normalize" in one call. The closest
+triton sequence is `mhc_fused_projection` *then* the RMS part of
+`mhc_fused_scale` — there is no standalone triton call that maps 1:1.
 
----
+**Shared ops (both sides):** projection, RMS, split/scale, sinkhorn,
+aggregate, expand-combine.
 
-## Per-op breakdown
+**Tilelang-only:** `mhc_head_compute_mix`, `expand_to_mhc`,
+`mhc_pre_big_fuse`, `mhc_multilayer_recompute`.
 
-### 1. Sinkhorn
-
-|                     | Triton (`_mhc_sinkhorn_*`)                                  | Tilelang (`_mhc_sinkhorn_*`)                               |
-| ------------------- | ----------------------------------------------------------- | ---------------------------------------------------------- |
-| Input               | `H_res: (s, b, n, n)`, any dtype (cast fp32 internally)     | `H_res: (num_tokens, n, n)`, fp32                          |
-| Output              | same shape as input, same dtype                             | same shape, fp32                                           |
-| Algorithm           | **Log-space** Sinkhorn. `f = -logsumexp(H + g, cols)`, `g = -logsumexp(H + f, rows)`, `out = exp(f + H + g)` | **Softmax + iterate**. `x = softmax(x, -1) + ε`; then alternating row/col normalize with `+ε` each divide |
-| Symmetry            | Symmetric alternation                                       | Asymmetric start (softmax is only along last dim)          |
-| Default iterations  | 20                                                          | 10                                                         |
-| Exact fixed point?  | Yes, up to fp32 rounding of `exp`                           | No — `+ε` in every step shifts the fixed point slightly    |
-| Recompute option    | `_recompute` variant avoids storing full `f/g` history in fwd for memory | Stores `xs` and `sums` in shared mem for bwd recompute |
-
-**Same function?** Yes — both project to the doubly-stochastic manifold. At
-finite iteration count they produce different intermediate values, and
-tilelang's `+ε` leaves the result ε-away from true doubly-stochastic.
+**Triton-only:** `bias` parameter inside `mhc_fused_expand_combine`
+(`f ← f + bias` folded into the outer product without materializing
+`f + bias`). Tilelang's `mhc_post` has no bias arg.
 
 ---
 
-### 2. Projection
+## 2. Parameter-by-parameter mapping
 
-|                     | Triton (`_mhc_projection_fwd_fused`)                        | Tilelang (`_mhc_pre_norm_fn_fwd_mul` + `_fwd_norm`)        |
-| ------------------- | ----------------------------------------------------------- | ---------------------------------------------------------- |
-| Input               | `x: (M, nC)`, `phi: (N, nC)` where `M=sb`, `N=2n+n²`        | `x: (num_tokens, n_rms_group·rms_group_size)`, `fn: (mhc_mult3, …)` |
-| Output              | `H: (M, 32)` padded (first N valid), `ms: (M,) = mean(x²)`  | Fully RMS-normalized `out: (num_tokens, mhc_mult3)` |
-| Computes            | `H = x @ φᵀ`, `ms = mean(x²)` — no RMS applied             | `H = x @ fnᵀ`, then `H · rsqrt(ms + ε)` applied inline; optional `fn := fn · mhc_norm_weight` pre-fold |
-| Multi-group?        | No                                                          | Yes — `n_rms_group > 1` computes RMS per group and sums over groups |
-| Output padding      | `(M, 32)` (ulp-free bf16 store)                             | `(M, mhc_mult3)` — but internal fragment still 32 cols (reads 32-row `fn`, so the caller must pad) |
+With default knobs aligned, both pipelines compute the same math up to
+bf16 rounding. The main difference is where each side draws the boundary
+between consecutive kernels (see §3).
 
-**Same function?** Not on their own — tilelang's one kernel equals triton's
-**projection → scale** pipeline composed. See next section.
+### 2.1 Projection
+
+| Triton `mhc_fused_projection(x, phi, use_tf32)` | Tilelang `mhc_pre_norm_fn(residual, mhc_fn, mhc_norm_weight, mhc_norm_eps, fuse_grad_acc, n_splits)` |
+| --- | --- |
+| `x: (M, K)` any dtype | `residual: (..., mhc_mult, hidden_size)` bf16; flattens to `(M, K)` where `K = mhc_mult·hidden_size` |
+| `phi: (24, K)` any dtype | `mhc_fn: (24, K)` fp32 |
+| — | `mhc_norm_weight: (K,)` fp32 or `None` — pre-multiplied into `mhc_fn` via `_MHCFnNormwMerge` before the projection |
+| — | `mhc_norm_eps: float` — RMS ε (triton keeps this in `mhc_fused_scale`) |
+| — | `fuse_grad_acc: bool` — bwd-path optimization (no effect on output math); see §5 for the mechanism. Short version: lets this bwd's `x_grad` and `mhc_post` bwd's `d_residual` land in one shared buffer summed on-chip, skipping a torch-level add |
+| — | `n_splits: int` — split-K hint (shipped wrapper pins to 1) |
+| `use_tf32: bool` | implicit — kernel rounds `mhc_fn` via `round_to_tf32()` and keeps bf16 inputs |
+| Returns `(H: (M, 32), ms: (M,))` | Returns `out: (..., 24)` — already RMS-normalized: `(x @ fn.T) · rsqrt(mean(x²) + eps)` |
+
+**Same output?** Yes on the shared math, modulo where the boundary is cut.
+
+- Raw `H = x @ phi.T` is the same matmul on both sides; up to tf32 rounding
+  in the MMA the two produce the same `H`. The triton kernel exposes it
+  directly; the tilelang kernel computes it internally but doesn't return
+  it.
+- `ms` (triton) and `rms = sqrt(ms + eps)` (tilelang, applied inline) are
+  the same statistic in different forms — `ms = mean(x²)`; tilelang
+  divides by `rsqrt(ms + eps)` inside the same kernel.
+- Because there's no learnable RMSNorm weight in this layer (unless the
+  caller passes `mhc_norm_weight`), composing triton's `mhc_fused_projection`
+  + the RMS step of `mhc_fused_scale` produces the same normalized tensor
+  as `mhc_pre_norm_fn`, to bf16 rounding.
+
+So the practical answer: the outputs match — just pulled out at different
+points in the pipeline.
+
+### 2.2 Scale / split mixes
+
+| Triton `mhc_fused_scale(H, alpha, beta, ms, n)` | Tilelang `mhc_pre_split_mixes(input_mixes, mhc_scale, mhc_base, mhc_mult, mhc_post_mult_value, mhc_pre_eps)` |
+| --- | --- |
+| `H: (M, 32)` — raw projection output | `input_mixes: (s, b, 2n+n²)` — already RMS-normed |
+| `alpha: (3,)` | `mhc_scale: (3,)` |
+| `beta: (1, 2n+n²)` | `mhc_base: (2n+n²,)` |
+| `ms: (M,)` — RMS applied inside this kernel | — (applied upstream in `mhc_pre_norm_fn`) |
+| `n: int` | `mhc_mult: int` |
+| hardcoded `h_post = 2 · sigmoid(...)` | `mhc_post_mult_value: float` — configurable, pass `2.0` to match triton |
+| hardcoded `h_pre = sigmoid(...)` | `mhc_pre_eps: float` — extra ε *added* to the `h_pre` sigmoid output; pass `0.0` to match triton |
+| Returns `(h_pre, h_post, h_res)` with shapes `(M, n), (M, n), (M, n²)` | Returns `(pre, post, comb_res)` with shapes `(s, b, n, 1), (s, b, n, 1), (s, b, n, n)` |
+
+**Same output?** Yes with `mhc_pre_eps=0` and `mhc_post_mult_value=2.0` —
+the math is identical and only the output layout differs (2D vs 4D with
+trailing 1). Any other `pre_eps`/`post_mult_value` puts them on different
+functions.
+
+### 2.3 Sinkhorn
+
+| Triton `mhc_fused_sinkhorn(H_res, n, recompute_hist, iters)` | Tilelang `sinkhorn_normalize(x, repeat, eps)` |
+| --- | --- |
+| `H_res: (s, b, n, n)` any dtype (cast to fp32 internally) | `x: (..., n, n)` **fp32 only** (kernel asserts) |
+| `n: int = 4` | inferred from `x.shape[-1]` |
+| `iters: int = 20` | `repeat: int = 10` |
+| `recompute_hist: bool = True` — opt out of storing fwd history | always recomputes |
+| — | `eps: float = 1e-6` — `+eps` in every row/col divide (shifts fixed point by O(ε)) |
+| Algorithm: **log-space** alternating logsumexp | Algorithm: **softmax init** then iterative `m / (rowsum+eps)` and `m / (colsum+eps)` |
+
+**Same output?** Yes at the limit, but not bit-identical at finite iters.
+
+Sinkhorn-Knopp converges to the *unique* doubly-stochastic matrix closest
+to the input (in KL divergence) regardless of whether you implement it in
+log-space or matrix form — so mathematically both sides have the same
+fixed point. Two sources of runtime divergence:
+
+- **Finite iteration count.** Defaults differ (triton 20, tilelang 10) and
+  at 20 iters neither is bit-converged. Intermediate values differ.
+- **tilelang's `+ε`** in every `1/(sum+ε)` divide perturbs the fixed point
+  by O(ε); triton's log-space form has no such offset.
+
+With matched `iters`/`repeat` and small `ε`, outputs agree to ~2e-3
+absolute at bf16 — fine for the bf16 tolerance bar, not close enough for
+bit-level reproducibility.
+
+### 2.4 Aggregate
+
+| Triton `mhc_fused_aggregate(x, H_pre, n, use_tf32)` | Tilelang `mhc_pre_apply_mix(x, mix, out)` |
+| --- | --- |
+| `x: (s, b, C, n)` | `x: (..., n, C)` — **axis order swapped** |
+| `H_pre: (s, b, n)` any dtype | `mix: (..., n, 1)` fp32 with trailing singleton |
+| `n: int` | inferred |
+| `use_tf32: bool` | implicit |
+| — | `out: Tensor \| None` — write-in buffer; wrapper allocates bf16 if `None` |
+| Returns `out: (s, b, C)` same dtype as `x` | Returns `out: (..., C)` bf16 (hard-cast) |
+
+**Same output?** Yes, modulo the axis-order reshuffle and the bf16 hard-cast
+on the tilelang side. Math is identical; the correctness harness sees 0.0
+abs diff when `x` is already bf16.
+
+### 2.5 Expand-combine / mhc_post
+
+| Triton `mhc_fused_expand_combine(f, bias, H_post, x, H_res, n, use_tf32)` | Tilelang `mhc_post(x, residual, post_layer_mix, comb_res_mix, out)` |
+| --- | --- |
+| `f: (s, b, C)` — sub-layer output | `x: (s, b, C)` — same role, different name |
+| `bias: (C,) \| None` — fused `f + bias` | **not supported** |
+| `H_post: (s, b, n)` any dtype | `post_layer_mix: (s, b, n, 1)` fp32 |
+| `x: (s, b, C, n)` — hyper-conn residual | `residual: (s, b, n, C)` — **axis order swapped** |
+| `H_res: (s, b, n, n)` | `comb_res_mix: (s, b, n, n)` fp32 |
+| `n: int`, `use_tf32: bool` | both implicit |
+| — | `out: Tensor \| None` |
+| Returns `(s, b, C, n)` | Returns `(s, b, n, C)` |
+
+**Same output?** Yes with `bias=None`, modulo the axis-order reshuffle.
+Math is identical and the correctness harness sees 0.0 abs diff at bf16.
+With `bias≠None` only triton can produce it — tilelang's `mhc_post` would
+require the caller to materialise `x + bias` first, which drops the whole
+point of the fused path.
 
 ---
 
-### 3. Scale (aka split mixes)
+## 3. Fusion boundary — what actually differs between "same op"
 
-|                     | Triton (`_mhc_scale_fwd_fused`)                             | Tilelang (`_mhc_pre_split_mixes_fwd`)                     |
-| ------------------- | ----------------------------------------------------------- | ---------------------------------------------------------- |
-| Input               | `H: (M, 32)`, `α: (3,)`, `β: (1, 2n+n²)`, `ms: (M,)`, `n`   | `input_mixes: (num_tokens, 2n+n²)` (already RMS-normed), `mhc_scale: (3,)`, `mhc_base: (2n+n²,)` |
-| Step 1 (RMS)        | `rms = sqrt(ms + ε)`, then `H / rms`                        | Not inside this kernel — assumed already applied upstream  |
-| Step 2 (affine)     | `H · α + β` (α broadcast to groups of `n, n, n²`)           | `input_mixes · α + β` (same broadcast)                     |
-| Step 3 (split)      | `H_pre = sigmoid(· )`, `H_post = 2·sigmoid(·)`, `H_res = · ` (no activation) | `pre = sigmoid(·) + pre_eps`, `post = sigmoid(·) · post_mult_value`, `comb_res = ·` |
-| Knobs               | `ε = finfo(fp32).eps`                                        | `pre_eps`, `post_mult_value` are config params             |
-
-**Equivalence**: under `pre_eps = 0`, `post_mult_value = 2`, and a matching
-`ε` in the rsqrt, tilelang's (pre_norm_fn + pre_split_mixes) computes the same
-function as triton's (projection + scale). All five of the following have to
-line up for bit-for-bit parity:
-
-  - tilelang `pre_eps == 0`
-  - tilelang `post_mult_value == 2`
-  - tilelang `n_rms_group == 1` and `rms_group_size == nC`
-  - tilelang `mhc_norm_weight is None`
-  - `bias is None` in expand_combine
-
-With those, both pipelines reduce to:
+Both impls compute the same "pre" path, but the cut between consecutive
+kernels is different:
 
 ```
-rms  = sqrt(mean(x²) + ε)
-H    = x @ φᵀ
-H_pre  = sigmoid(H[:n]     · α₀ / rms + β[:n])
-H_post = 2 · sigmoid(H[n:2n] · α₁ / rms + β[n:2n])
-H_res  = H[2n:]           · α₂ / rms + β[2n:]
+triton:   x → [proj: (H, ms)] → [scale + RMS: h_pre, h_post, h_res] → [sinkhorn] → [aggregate]
+tilelang: x → [proj + RMS: H] → [split: pre, post, comb_res]          → [sinkhorn] → [pre_apply_mix]
+                        ^^^  RMS moved one kernel upstream
 ```
 
----
+Consequences:
 
-### 4. Aggregate / pre-apply-mix
+- Triton surfaces `ms` — you can log it, reuse it for something else, or
+  run it through your own scale.
+- Tilelang consumes `ms` internally and never returns it. There is no
+  way to pull the pre-RMS matmul output out of `mhc_pre_norm_fn`.
+- Unit-level benchmarking between the two should compare at each impl's
+  natural boundary rather than forcing identical op coverage. Attempting
+  `proj_only` on the tilelang side is not well-defined.
 
-|                     | Triton (`_mhc_aggregate_fwd`)                                | Tilelang (`_mhc_pre_apply_mix_fwd`)                        |
-| ------------------- | ------------------------------------------------------------ | ---------------------------------------------------------- |
-| Input               | `x: (s, b, C, n)`, `H_pre: (s, b, n)`                        | `x: (n_tokens, n, C)` bf16, `mix: (n_tokens, n)` fp32      |
-| Output              | `out: (s, b, C)`, same dtype as x                            | `out: (n_tokens, C)` bf16 (hard-cast on store)             |
-| Math                | `out[c] = Σₙ x[c,n] · h[n]`                                   | `out[c] = Σₙ x[n,c] · mix[n]` — same sum, different axis layout |
+Under the aligned defaults (`mhc_pre_eps = 0`, `mhc_post_mult_value = 2`,
+`mhc_norm_weight = None`, `bias = None`, single RMS group, same `eps`) both
+end-to-end pipelines compute the same function modulo:
 
-**Same function?** Yes. Differences are purely layout and the bf16 cast on
-output.
-
----
-
-### 5. Expand-combine / Post
-
-|                     | Triton (`_mhc_expand_combine_fwd[_with_bias]`)               | Tilelang (`mhc_post_fwd`)                                  |
-| ------------------- | ------------------------------------------------------------ | ---------------------------------------------------------- |
-| Input               | `f: (s,b,C)`, `bias: (C,)|None`, `H_post: (s,b,n)`, `x: (s,b,C,n)`, `H_res: (s,b,n,n)` | `x: (s,b,C)`, `residual: (s,b,n,C)`, `post_layer_mix: (s,b,n,1)`, `comb_res_mix: (s,b,n,n)` |
-| Output              | `out: (s, b, C, n)`                                          | `out: (s, b, n, C)`                                        |
-| Math                | `out = (f + bias) ⊗ H_post + x @ H_res`                     | `out = H_post ⊗ f + einsum('mn,mc->nc', H_res, residual)` |
-| H_res contraction   | Contracts **first** n dim (`x @ H_res`: `sum_m x[C,m]·H_res[m,n]`) | Contracts **first** n dim (`einsum('abmn,abmc->abnc'…)`) |
-| Bias support        | Yes (`_with_bias` kernel)                                    | No — wrapper has no `bias` arg                             |
-
-**Same function?** Yes, when `bias is None`. Triton's `bias` is the one real
-feature gap in expand-combine.
+- Sinkhorn algorithm difference (log-space vs softmax+ε).
+- bf16 rounding across the matmul reductions.
+- `round_to_tf32` applied to `mhc_fn` inside the tilelang norm_fn kernel.
 
 ---
 
-## Convention & layout cheat sheet
+## 4. PyTorch-surface differences beyond the math
 
-| What                       | Triton                    | Tilelang                  |
-| -------------------------- | ------------------------- | ------------------------- |
-| `x` in aggregate           | `(s, b, C, n)`            | `(s, b, n, C)` (flattened to `(sb, n, C)`) |
-| `x` in expand-combine      | `(s, b, C, n)`            | `(s, b, n, C)`            |
-| Output of expand-combine   | `(s, b, C, n)`            | `(s, b, n, C)`            |
-| `H_res` first-dim semantic | input stream              | input stream              |
-| Sinkhorn shape             | `(s, b, n, n)`            | `(num_tokens, n, n)`      |
+| Concern | Triton | Tilelang |
+| --- | --- | --- |
+| Autograd surface | `autograd.Function` subclass per op | `autograd.Function` subclass per op |
+| `bias` in expand-combine | Yes | No |
+| `ms` / RMS stat observable | Yes (`mhc_fused_projection` returns it) | No |
+| Multi-group RMS (`n_rms_group > 1`) | No | Latent — kernel IR supports it, wrapper pins to 1 and doesn't expose it. See sub-section below |
+| Pre-multiplied `mhc_norm_weight` | No | `_MHCFnNormwMerge` folds it into `mhc_fn` |
+| `main_grad` write-through | No | `_MHCFnNormwMerge` writes into `fn.main_grad` / `normw.main_grad` when present (Megatron-style fp32 grad-accum buffer) — see §5 |
+| Entry broadcast `(s,b,h) → (s,b,n,h)` | Do it with `view`/`expand`/`contiguous` | `expand_to_mhc` dedicated op |
+| First-layer partial scale | Call full `mhc_fused_scale`, ignore 20 of 24 columns | `mhc_head_compute_mix` — only computes pre-mix |
+| Mega-fused pre path | No | `mhc_pre_big_fuse` — projection + split + sinkhorn + aggregate in one launch; **inference-only (no backward)** — called only under `if not torch.is_grad_enabled()` |
+| Multi-layer grad checkpointing | At the torch level | `mhc_multilayer_recompute` as a dedicated op |
+| Precision knob | `use_tf32: bool` per-op flag | Implicit; `round_to_tf32` applied in the wrapper, bf16/fp32 split is baked in |
+| Backward determinism | **Non-deterministic** (atomics); gated by `NVTE_ALLOW_NONDETERMINISTIC_ALGO=1` | **Deterministic** — persistent-block + reducer + per-SM partial accumulation |
+| Sinkhorn memory/compute trade | `recompute_hist: bool` flag | Always recomputes |
+| Cold start | Autotune search on first shape (`NVTE_DISABLE_TRITON_AUTOTUNING=1` to pin) | TileLang JIT compile on first shape config |
+| `sum().backward()` (stride-0 grad) | Accepted | Rejected by some kernels (sinkhorn bwd, norm_fn bwd); use `.backward(torch.ones_like(out))` |
+| `mhc_fn` padding requirement | N/A — `phi: (24, K)` is all the kernel reads | `mhc_fn` underlying storage must have **32 rows** (the projection kernel reads rows 0–31 even though `mhc_mult3 = 24`). Allocate `(32, K)` and pass `.view()[:24]`; the wrapper asserts `(24, K)` but doesn't pad for you. |
+| `n_splits` parameter on `mhc_pre_norm_fn` | N/A | Advertised in the signature but **inert** — wrapper body overrides to 1 (comment: "TileLang doesn't support split-K") |
+| Input dtype strictness | Wrappers auto-cast internally | `mhc_post` asserts `x, residual: bf16` and `mixes: fp32`; `mhc_pre_norm_fn` asserts `x: bf16, fn: fp32` — callers must pre-cast |
+| `mhc_post` bwd hand-off housekeeping | N/A | `mhc_post_bwd` always stashes `d_residual` on `residual.storage().grad_from_mhc_post` (default `fuse_grad_acc=True`). Downstream `mhc_pre_norm_fn`/`mhc_pre_apply_mix` bwd `del`s it. If nothing downstream consumes, it leaks on the storage for that tensor's lifetime. |
 
-Both impls agree on the `H_res` contraction direction, so no transpose is
-needed between them — only the `(n, C) ↔ (C, n)` swap when moving x/residual
-between sides.
 
----
+> ### Multi-group RMS — what `n_rms_group` would enable
 
-## Tilelang-only fusion kernels
+Not user-visible today — the wrapper calls the kernel with
+`n_rms_group=1`. Flagging it because the parameter exists in the kernel
+signature and may show up if the wrapper is extended later.
 
-### `pre_big_fuse_kernel._mhc_pre_big_fuse`
-One kernel that does **the entire "pre" path** in a transformer block:
+Triton's RMSNorm step uses `ms: (M,)` — one mean-square per token across the
+entire hidden dim `K = mhc_mult · hidden_size`:
 
-  1. `_mhc_pre_norm_fn_fwd_norm` — RMS-normalize projected mixes
-  2. `_mhc_pre_split_mixes_fwd` — sigmoid / bias / α into pre, post, comb_res
-  3. `_mhc_sinkhorn_fwd` — project comb_res to doubly-stochastic
-  4. `_mhc_pre_apply_mix_fwd` — aggregate via `pre`
+```
+ms = mean(x[m, :]²)
+rms = sqrt(ms + eps)
+H_normed = (x @ phi.T) / rms
+```
 
-Triton equivalent: four separate kernel launches (projection output + scale +
-sinkhorn + aggregate). Same math, 4× fewer launches, all state lives in
-register / shared memory across the fused body.
+The tilelang `mhc_pre_norm_fn` kernel parameterizes the hidden axis as
+`n_rms_group · rms_group_size`. With `n_rms_group > 1`, the hidden axis
+is sliced into groups and each group gets its own RMS denominator:
 
-### `multilayer_recompute_kernel.mhc_multilayer_recompute`
-Replays multiple mHC layers in one kernel for the backward pass (gradient
-checkpointing). Iterates per-token, maintains the residual state in register,
-consumes a list of layer pointers. Saves device memory by not storing per-layer
-activations; pays per-layer forward cost during bwd.
+```
+for k in range(n_rms_group):
+    x_k   = x[:, k*G : (k+1)*G]
+    fn_k  = fn[:, k*G : (k+1)*G]
+    ms_k  = mean(x_k²)
+    rms_k = sqrt(ms_k + eps)
+    out  += (x_k @ fn_k.T) / rms_k
+```
 
-Triton equivalent: no standalone kernel — caller would rerun the full forward
-sequence N times.
+Equivalently: split `x` along the hidden axis, RMSNorm each slice with its
+own statistic, then the per-group matmuls sum into the same output (the
+matmul is linear over the hidden axis, so per-group scales just factor in).
 
-### `expand_kernel.expand_to_mhc_fwd`
-Broadcasts `(s, b, h) → (s, b, n, h)` (replicates the hidden state across n
-streams) at the *entry* of the first mHC block. Backward sums across n.
-
-Triton equivalent: a view + contiguous would do this for free; it's not a
-function, it's a layout thing tilelang packages as a kernel for consistency.
-
-### `head_compute_mix_kernel._mhc_head_compute_mix`
-A shrunk version of `pre_split_mixes` that only computes the `pre` portion
-(width `n`, not `2n + n²`). Used for the first layer where no post / comb_res
-mix is needed yet.
-
-Triton equivalent: call full `scale`, ignore 20 of the 24 output columns.
-
----
-
-## Feature gaps
-
-### Triton-only
-- **`bias` in expand_combine.** `_mhc_expand_combine_with_bias_*` kernels fold
-  `f ← f + bias` into the outer product without materialising `f + bias`.
-  Tilelang wrapper doesn't accept `bias`.
-- **Separate projection output.** `mhc_fused_projection` returns raw `(H, ms)`
-  — useful if the downstream consumer of `ms` is something other than a scale
-  op (e.g. export the statistic for profiling / loss).
-- **TF32 toggle.** `use_tf32=False` forces IEEE fp32 for matmul.
-
-### Tilelang-only
-- **`mhc_norm_weight`** pre-multiplied into `fn` — fuses an elementwise norm
-  weight into the projection without a separate kernel.
-- **Multi-group RMS** (`n_rms_group > 1`) — splits the hidden dim into
-  independent RMS groups, handy for grouped variants of mHC.
-- **`pre_eps`, `post_mult_value`** — config knobs on the sigmoid outputs.
-- **Projection / norm split parameter (`n_splits`)** — allows K-splitting the
-  projection matmul into parallel chunks combined by a separate norm kernel.
-- **Super-fused `pre_big_fuse`** and **`multilayer_recompute`** as above.
-- **`expand_to_mhc`** as a standalone kernel.
+Intended use would be **per-stream normalization** — setting
+`n_rms_group = mhc_mult` and `rms_group_size = hidden_size` gives each of
+the `n` mHC streams its own RMS, so one loud stream doesn't swamp the
+normalization of the others. `n_rms_group = 1` collapses to standard
+single-group RMSNorm and matches triton's path.
 
 ---
 
-## Optimization strategy differences
+## 5. Optimization strategy differences
 
-Same mathematical work, different performance tactics.
+| Dimension | Triton | Tilelang |
+| --- | --- | --- |
+| Config selection | `@triton.autotune` over block / warps / stages list, cached per shape | Hand-tuned configs baked into `@tilelang.jit` wrappers; `pass_configs` overrides PTXAS/codegen (warp specialize, register-usage level, WGMMA, 256-bit vec) |
+| Fusion granularity | One op = one kernel (`_with_bias` is a sibling kernel, not a parameter path) | Granular ops + mega-fused kernels (`pre_big_fuse`, `multilayer_recompute`) |
+| Cross-block reduction | `tl.atomic_add` — non-deterministic | `T.Persistent([...], num_sms, pid)` + `T.alloc_reducer(replication='all')` + per-SM partials summed outside kernel — deterministic |
+| Memory pipelining | Compiler-scheduled; only user knob is `num_stages` in autotune space | Explicit `T.Pipelined(...)`, `T.async_copy`, TMA opt-in/out per `T.copy` |
+| Shared-memory layout | Compiler-chosen | Explicit `tilelang.layout.make_swizzled_layout` annotations |
+| Precision path | `use_tf32` flag toggles `tl.dot(precision='tf32'|'ieee')` | Explicit casts `T.copy(bf16_frag, fp32_frag)`; `round_to_tf32` in python wrapper |
+| Kernel persistence | Grid = one block per tile | `T.Persistent` — persistent blocks loop over tiles, sized to device SM count |
+| Gradient accumulation | bwd returns `grad` tensors, torch adds to `param.grad` | `fuse_grad_acc=True` chains one op's `d_residual` into the next op's bwd kernel as a write-in buffer (see sub-section below); `_MHCFnNormwMerge` writes into `fn.main_grad` directly when that attribute is present |
+| Recompute-vs-store | Sinkhorn has `recompute_hist` flag; projection/aggregate always store; expand-combine always stores | Sinkhorn always recomputes; whole-layer replay via `mhc_multilayer_recompute` |
 
-### 1. Autotuning vs hand-tuned configs
+> ### The `fuse_grad_acc` chain, in detail
 
-**Triton.** Each kernel has a `*_config_fwd()` / `*_config_bwd()` function
-that enumerates `{BLOCK_SIZE_M, BLOCK_SIZE_K, STEP_SIZE_K, num_warps,
-num_stages}` combinations, wrapped in `@triton.autotune`. First invocation
-explores the space and caches the winner. Escape hatch:
-`NVTE_DISABLE_TRITON_AUTOTUNING=1` collapses to a single config (first one in
-the list) for deterministic per-invocation latency during profiling.
+Output math is the same either way — this is purely a bwd-path optimization
+to avoid a torch-level add.
 
-**Tilelang.** No autotuner. Block sizes are baked in as parameters at kernel
-JIT time (e.g. `_mhc_post_fwd(mhc, hidden, n_thr=128, h_blk=1024)`). The
-`pass_configs` dict passes PTXAS/codegen pragmas straight to the backend:
+An mHC block consumes the *same* `residual` tensor twice during forward:
+once at the entry (`mhc_pre_norm_fn(residual, fn)`) and once at the exit
+(`mhc_post(x, residual, ...)`). In backward, both ops need to produce a
+gradient w.r.t. that shared tensor and those grads have to be summed.
 
-  - `TL_DISABLE_WARP_SPECIALIZED: True` — turn off Hopper warp-specialized
-    pipelining
-  - `TL_PTXAS_REGISTER_USAGE_LEVEL: 10` — pin register-usage level (tighter
-    than default; lets the author prioritise occupancy vs register pressure)
-  - `TL_DISABLE_VECTORIZE_256: True` — cap load/store vectorization at 128b
-  - `TL_DISABLE_WGMMA: True` (norm_fn kernels) — fall back to non-WGMMA MMAs
+Stock autograd would allocate two separate grad tensors and add them via a
+torch-level op. Tilelang's `fuse_grad_acc` path skips that add:
 
-This is a fundamentally different philosophy: triton searches; tilelang
-author-picks. Wins and losses are symmetric — autotune adapts to new GPUs
-without code changes but costs a cold-start search; hand-tuning is instantly
-fast but may miss a new arch's sweet spot.
+1. `mhc_post_bwd(...)` computes `d_residual` and stashes it on the tensor's
+   storage:
+   ```python
+   residual.untyped_storage().grad_from_mhc_post = d_residual
+   ```
+2. When `mhc_pre_norm_fn` bwd fires later, it picks that stashed tensor up
+   and uses it directly as its own `x_grad` output buffer:
+   ```python
+   x_grad = x.untyped_storage().grad_from_mhc_post.view_as(x)
+   ```
+3. The `_mhc_pre_norm_fn_bwd_mul` kernel loads the existing contents of
+   `x_grad` into a fragment, accumulates its own contribution on top
+   (`T.gemm(..., clear_accum=False)` plus the RMS-derivative term), and
+   writes the sum back — all on-chip, in the same store that would have
+   happened anyway.
+4. The autograd return then passes `None` for the residual grad slot so
+   torch does not attempt to add a second time.
 
-### 2. Fusion granularity
+Net effect: one buffer, summed in the last store of the kernel, no
+zero-init, no torch-level add, no second allocation. The same mechanism
+also appears in `mhc_pre_apply_mix`'s backward (it checks
+`hasattr(x.untyped_storage(), 'grad_from_mhc_post')` and folds its own
+`x_grad` into that same stash when the upstream `mhc_post` populated it).
 
-**Triton.** One-op-per-kernel. Even the `_with_bias` variant is a sibling
-kernel, not a parameter path. The triton "pre" sequence is four launches
-(projection → scale → sinkhorn → aggregate).
+Triton has no equivalent — gradients flow through `.grad` like any other
+autograd function, and the add happens at the torch level.
 
-**Tilelang.** Offers both granular and mega-fused versions. `pre_big_fuse`
-does all four "pre" ops in one launch, keeping intermediates in registers.
-`multilayer_recompute` goes further, running N full mHC layers inside one
-kernel for gradient checkpointing. Trade-off: fewer launches and less HBM
-traffic, but larger kernels (register and shared-memory pressure) and less
-flexibility to mix kernels from different providers.
+> ### `main_grad` write-through — same idea, for weight params
 
-### 3. Cross-block reduction — atomics vs persistent blocks
+Megatron-LM attaches a second gradient buffer to each learnable parameter
+called `main_grad` — a pre-allocated fp32 tensor used to accumulate
+parameter gradients across microbatches in higher precision than the
+parameter dtype (bf16/fp16). The normal flow is:
 
-**Triton.** Uses `tl.atomic_add` for gradients that reduce across blocks
-(`grad_H_pre`, `grad_H_post`, `grad_H_res`, `grad_bias` in expand-combine;
-`grad_α`, `grad_β`, `grad_ms` in scale; `grad_phi` piece of projection). This
-is **non-deterministic** (atomic ordering varies); `mhc_ops.py` asserts
-`NVTE_ALLOW_NONDETERMINISTIC_ALGO=1`.
+```
+bwd kernel → fresh grad tensor → torch adds to .grad → loop casts & adds to .main_grad
+```
 
-**Tilelang.** Uses `T.Persistent([…], num_sms, pid)` — a fixed number of
-threadblocks each iterating over many tiles — combined with
-`T.alloc_reducer(replication='all')` to accumulate within one block.
-Cross-block reductions (e.g. `mhc_scale_grad_partial: (num_sms, 3)`) are
-written as per-SM partials and summed **outside** the kernel. Deterministic,
-but requires sizing `num_sms` to the device (pragma in Python).
+Three passes over the grad data, plus an extra allocation.
 
-### 4. Memory pipelining
-
-**Tilelang.** Explicit:
+Tilelang's `_MHCFnNormwMerge` (the autograd fn that folds
+`mhc_norm_weight` into `mhc_fn` before the projection) sniffs for
+`main_grad` on its inputs:
 
 ```python
-for i0_h in T.Pipelined(T.ceildiv(h, h_blk), num_stages=2):
-    T.copy(x[...], xs, disable_tma=True)
-    T.copy(xs, xl)
-    ...
+ctx.fn_main_grad    = getattr(fn, 'main_grad', None)
+ctx.normw_main_grad = getattr(normw, 'main_grad', None)
 ```
 
-Uses `T.async_copy` (`multilayer_recompute`), opts in/out of TMA per `T.copy`
-via `disable_tma`, and invokes `T.pdl_sync()` for Hopper Program-Dependent
-Launch. Register vs. shared-mem tiling is under author control.
+If present, the bwd kernel receives `main_grad` directly as its output
+buffer and accumulates into it in-place (same `clear_accum=False`
+pattern). The autograd fn returns `None` for that slot so torch doesn't
+allocate a second grad and double-count.
 
-**Triton.** No explicit async API. The IR lowering and compiler schedule the
-loads; `num_stages` in the autotune space is the only user knob and selects
-the pipeline depth the compiler targets.
-
-### 5. Shared-memory layout
-
-**Tilelang.** Explicit swizzling annotations:
-
-```python
-T.annotate_layout({x_smem_16: tilelang.layout.make_swizzled_layout(x_smem_16)})
+```
+bwd kernel → .main_grad (fp32, directly)
 ```
 
-Selects one of a few known-good bank-conflict-avoiding layouts. Used in
-`norm_fn_fwd_mul` and `pre_split_mixes` (for the fragment-layout hint).
+One pass instead of three. Same underlying optimization as
+`fuse_grad_acc`, just targeting weight-parameter gradients via Megatron's
+convention instead of chaining activation gradients between adjacent
+mHC ops.
 
-**Triton.** Layout is compiler-chosen; no user knob. Works well for standard
-matmul shapes; less control over edge cases.
+Triton has no equivalent — parameter grads flow through `.grad` and the
+training loop is responsible for syncing them into `main_grad` later.
 
-### 6. Precision knobs
+> ### Multi-layer replay — `mhc_multilayer_recompute`
 
-Both sides use fp32 accumulators for bf16 matmul. Difference is in how the
-cast is expressed:
+Activation-checkpointing primitive: replays the mHC plumbing across **N
+transformer layers in a single kernel**, keeping the residual in
+registers across layer boundaries instead of round-tripping it through
+HBM.
 
-- **Triton** exposes `use_tf32: bool` (exposed in `mhc_ops.py`) which toggles
-  the `precision="tf32"|"ieee"` argument of `tl.dot`. Matters for fp32 inputs.
-- **Tilelang** performs the cast explicitly: loads bf16 into a shared-memory
-  tile, then `T.copy(bf16_frag, fp32_frag)` before the reduction. No user
-  knob; the kernel author pins the precision.
+The mHC glue per layer is `layer_input = aggregate(residual, pre_mix)`
+before the sublayer, and `new_residual = post_mix ⊗ layer_output +
+comb_mix @ residual` after it. Those are what the kernel replays. It
+does **not** replay the sublayer itself (attention / FFN) — `layer_output`
+is loaded from the saved forward. It also doesn't replay the projection /
+split / sinkhorn — those mixes are assumed saved.
 
-### 7. Determinism
+Per-token CTA, for each of the `N` layers:
 
-- **Triton forward**: deterministic.
-- **Triton backward**: **non-deterministic** (atomics); gated by the
-  `NVTE_ALLOW_NONDETERMINISTIC_ALGO` env flag with an `assert` failure if
-  unset.
-- **Tilelang (fwd and bwd)**: deterministic — uses the persistent-block +
-  reducer pattern instead of atomics.
+1. `residual: (mhc, h_blk)` stays in a register fragment across all
+   layers; only the first layer loads it from HBM.
+2. Next layer's `pre_mix`, `post_mix`, `comb_mix`, `layer_output` are
+   `T.async_copy`-ed into a double-buffered shared slot (`[2, ...]`,
+   `phase = i_layer % 2`), overlapping HBM load of layer `i+1` with
+   compute of layer `i`.
+3. `layer_input` and `new_residual` are stored to HBM each layer
+   (the sublayer bwd and the post bwd need them).
+4. `residual_register ← bf16(new_residual)` — bf16 round-trip keeps the
+   recompute bit-identical to the non-checkpointed forward (which would
+   have stored bf16 to HBM between layers).
 
-This is a real behavioural difference, not just performance. Run-to-run bit
-reproducibility in training is a triton-path concern that tilelang sidesteps.
+The wrapper takes lists of per-layer pointers and builds a device-side
+pointer table once (`_make_ptr_tables_batched`, pinned-CPU staging →
+one HtoD copy), so the kernel just indexes into arrays of pointers.
 
-### 8. Kernel persistence / launch overhead
+Versus `torch.utils.checkpoint`: that re-runs the whole python-level
+forward — dozens of kernel launches × N layers, residual written to
+HBM and read back each layer, no async pipelining. This kernel collapses
+it to one launch with the residual staying in registers.
 
-Tilelang's `T.Persistent` gives each threadblock a work loop over multiple
-tiles, so one launch handles many tiles (sized to `num_sms`). Triton launches
-one block per tile (standard grid). For kernels where tile count is modest
-and per-launch overhead is non-trivial (small-M, small-K cases) the persistent
-model wins; for huge problems the overhead is amortised either way.
+Triton has no equivalent — you'd pay the full `torch.utils.checkpoint`
+cost or save every residual.
 
-### 9. Summary
+### Philosophy
 
-| Strategy dimension           | Triton                                | Tilelang                              |
-| ---------------------------- | ------------------------------------- | ------------------------------------- |
-| Autotuning                   | Runtime search over config list       | Hand-tuned, baked in at JIT           |
-| Fusion granularity           | One op per kernel                     | Per-op + mega-fused (`pre_big_fuse`, `multilayer_recompute`) |
-| Cross-block reduction        | `tl.atomic_add` (non-deterministic)   | `T.Persistent` + `alloc_reducer` + per-SM partials (deterministic) |
-| Memory pipelining            | Compiler-scheduled                    | Explicit `T.Pipelined` / `T.async_copy`, TMA opt-in/out |
-| Shared-memory layout         | Compiler-chosen                       | Explicit swizzle annotations          |
-| Precision knobs              | `use_tf32` flag                       | Explicit fp32 cast in kernel          |
-| Determinism                  | Non-det in backward                   | Fully deterministic                   |
-| Kernel persistence           | Grid = one block per tile             | Persistent blocks iterate over tiles  |
+- **Triton** searches the config space at runtime: adapts to new GPUs without
+  code changes, pays a cold-start autotune cost on first call per shape.
+- **Tilelang** pins configs by hand: instantly fast on the arch it was tuned
+  for, may need re-tuning per arch, but has headroom to express Hopper-
+  specific primitives (TMA, WGMMA, async_copy, persistent blocks).
+- **Triton** writes fewer, simpler kernels and lets the compiler schedule.
+  **Tilelang** writes more, hand-scheduled kernels and reaches for
+  explicit swizzling, warp specialization, and mega-fusion.
+- **Triton** prioritises author throughput. **Tilelang** prioritises
+  end-to-end fusion and determinism.
 
 ---
 
-## When this matters in practice
+## 6. When it matters in practice
 
-If you're deciding which impl to use, the axes that end up mattering:
-
-- **Determinism.** If your training / regression tests require bitwise
-  reproducibility, triton's backward is a problem until you either turn off
-  autotune *and* sit on a single-SM config (collapsing atomics to a single
-  writer), or replace it. Tilelang is deterministic by default.
-
-- **Bias.** If you need fused `f + bias` in expand-combine, triton is the only
-  option of the two. Tilelang would need the caller to materialise `f + bias`
-  up front.
-
-- **Multi-group RMS / `mhc_norm_weight`.** If your mHC variant needs either,
-  tilelang is your only option.
-
-- **Grad checkpointing / memory pressure.** `multilayer_recompute` is unique to
-  tilelang. On triton you'd need torch-level activation checkpointing.
-
-- **Cold start cost.** Triton pays an autotune search on first invocation of
-  each shape; tilelang pays a single JIT compile (slower initial compile, no
-  search). For short-lived jobs or notebooks, triton feels slower to warm up.
-
-- **New GPU architectures.** Triton's autotune picks fresh configs without
-  code changes. Tilelang's hand-picked configs may need re-tuning per arch.
-
-Under the config defaults above (`pre_eps=0, post_mult_value=2, n_rms_group=1,
-mhc_norm_weight=None, bias=None`) the functional outputs match within bf16
-rounding — so feature parity reduces to which engineering trade-offs you prefer.
+- Need `bias` fused into expand-combine → **triton** is the only option.
+- Need `mhc_norm_weight` folded into the projection matmul → **tilelang**.
+- Need bitwise-reproducible backward → **tilelang**.
+- Need grad checkpointing inside one or several mHC layers →
+  **tilelang** (`mhc_multilayer_recompute`).
+- Need to observe or re-use `ms` → **triton** (`mhc_fused_projection`).
+- Care about minimising launch overhead for the pre path → **tilelang**
+  (`mhc_pre_big_fuse` collapses 4 ops into 1 launch).
+- Running on a brand-new architecture where no one has hand-tuned yet →
+  **triton** (autotune will pick fresh configs without code changes).
