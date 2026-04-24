@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+.claude
+
+# Benchmark / profile outputs
+profile/
+bench_plots/
+output.png
+*.ncu-rep
+*.nsys-rep
+*.qdrep
+*.sqlite
+
+# Triton / TileLang caches
+.triton/
+.tilelang/
