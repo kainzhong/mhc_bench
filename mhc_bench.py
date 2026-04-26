@@ -29,6 +29,9 @@ from tilelang_kernels.modeling.mhc.ops.ops import (
     sinkhorn_normalize as tl_sinkhorn,
 )
 
+# flash_mhc registers torch.ops.flash_mhc.* on import.
+import flash_mhc.ops  # noqa: F401  (side-effect import)
+
 # Allocate random inputs + ones-like grads once on first call and reuse for
 # all subsequent warmup / measured iterations — otherwise the repeated
 # `torch.randn` / `torch.ones_like` launches dominate the nsys profile and
@@ -216,6 +219,54 @@ def run_expand_combine_tilelang(B, T, n, C, dtype, device):
     out_grad = _get("ec_tl_grad", lambda: torch.ones_like(out))
     out.backward(out_grad)
 
+# ---------------------------------------------------------------------------
+# flash_mhc — only implements 3 of the 5 ops (no scale, no sinkhorn).
+# K1 (fused_rmsnorm_project): projection + RMS, no sigmoid/affine/split (like cutile).
+# K3 (fused_pre_map):  aggregate.
+# K4 (fused_post_res): post / expand_combine.
+# Note: flash_mhc projection uses W of shape (2n + n!, nC) = (32, nC) for n=4
+# because the BvN parameterization replaces the n² Sinkhorn output with n!
+# permutation coefficients.
+# ---------------------------------------------------------------------------
+
+def run_projection_flashmhc(B, T, n, C, dtype, device):
+    nC = n * C
+    OUT_N = 2 * n + 24  # = 2n + n! for n=4 (BvN parameterization)
+    BT = B * T
+    x = _get("proj_fm_x",
+             lambda: torch.randn(BT, nC, dtype=dtype, device=device, requires_grad=True))
+    W = _get("proj_fm_W",
+             lambda: torch.randn(OUT_N, nC, dtype=dtype, device=device, requires_grad=True))
+    out, inv_rms = torch.ops.flash_mhc.fused_rmsnorm_project(x, W)
+    out_grad = _get("proj_fm_out_grad", lambda: torch.ones_like(out))
+    inv_rms_grad = _get("proj_fm_inv_rms_grad", lambda: torch.ones_like(inv_rms))
+    torch.autograd.backward([out, inv_rms], [out_grad, inv_rms_grad])
+
+def run_aggregate_flashmhc(B, T, n, C, dtype, device):
+    BT = B * T
+    x = _get("agg_fm_x",
+             lambda: torch.randn(BT, n, C, dtype=dtype, device=device, requires_grad=True))
+    h_pre = _get("agg_fm_h_pre",
+                 lambda: torch.randn(BT, n, dtype=torch.float32, device=device, requires_grad=True))
+    out = torch.ops.flash_mhc.fused_pre_map(x, h_pre)
+    out_grad = _get("agg_fm_grad", lambda: torch.ones_like(out))
+    out.backward(out_grad)
+
+def run_expand_combine_flashmhc(B, T, n, C, dtype, device):
+    BT = B * T
+    x_streams = _get("ec_fm_x_streams",
+                     lambda: torch.randn(BT, n, C, dtype=dtype, device=device, requires_grad=True))
+    layer_output = _get("ec_fm_lo",
+                        lambda: torch.randn(BT, C, dtype=dtype, device=device, requires_grad=True))
+    H_merged = _get("ec_fm_H",
+                    lambda: torch.randn(BT, n, n, dtype=torch.float32, device=device, requires_grad=True))
+    h_post = _get("ec_fm_hp",
+                  lambda: torch.randn(BT, n, dtype=torch.float32, device=device, requires_grad=True))
+    out = torch.ops.flash_mhc.fused_post_res(x_streams, layer_output, H_merged, h_post)
+    out_grad = _get("ec_fm_grad", lambda: torch.ones_like(out))
+    out.backward(out_grad)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--operation", choices=["sinkhorn", "projection", "scale", "aggregate", "expand_combine", "all"], required=True)
@@ -239,10 +290,13 @@ def main():
 
     print(f"Running {args.operation} with B={B}, T={T}")
 
-    # Per-framework runners for one op. cutile has no scale kernel, so that
-    # cell is a no-op on the cutile side.
+    # Per-framework runners for one op. Some frameworks don't implement
+    # every op (cutile/flashmhc have no scale; flashmhc has no sinkhorn) —
+    # those cells are no-ops.
     def run_op_fw(op, fw):
         if op == "sinkhorn":
+            if fw == "flashmhc":
+                return  # flashmhc uses BvN, no sinkhorn kernel.
             {
                 "triton":   run_sinkhorn_triton,
                 "cutile":   run_sinkhorn_cutile,
@@ -253,10 +307,11 @@ def main():
                 "triton":   run_projection_triton,
                 "cutile":   run_projection_cutile,
                 "tilelang": run_projection_tilelang,
+                "flashmhc": run_projection_flashmhc,
             }[fw](B, T, n, C, dtype, device)
         elif op == "scale":
-            if fw == "cutile":
-                return  # cutile has no scale kernel (pytorch fallback upstream).
+            if fw in ("cutile", "flashmhc"):
+                return  # neither has a scale kernel (pytorch fallback upstream).
             {
                 "triton":   run_scale_triton,
                 "tilelang": run_scale_tilelang,
@@ -266,12 +321,14 @@ def main():
                 "triton":   run_aggregate_triton,
                 "cutile":   run_aggregate_cutile,
                 "tilelang": run_aggregate_tilelang,
+                "flashmhc": run_aggregate_flashmhc,
             }[fw](B, T, n, C, dtype, device)
         elif op == "expand_combine":
             {
                 "triton":   run_expand_combine_triton,
                 "cutile":   run_expand_combine_cutile,
                 "tilelang": run_expand_combine_tilelang,
+                "flashmhc": run_expand_combine_flashmhc,
             }[fw](B, T, n, C, dtype, device)
 
     def run_all_for_fw(fw):
@@ -286,7 +343,7 @@ def main():
     # isolates L2/cache state between frameworks so each gets a clean warmup.
     # nsys must be launched with `--capture-range-end=repeat` so every
     # Start/Stop pair is captured into the same .nsys-rep.
-    frameworks = ["triton", "cutile", "tilelang"]
+    frameworks = ["triton", "cutile", "tilelang", "flashmhc"]
     for fw in frameworks:
         # Warmup this framework.
         for _ in range(args.warmup):
