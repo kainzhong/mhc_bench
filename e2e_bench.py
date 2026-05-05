@@ -44,7 +44,7 @@ from triton_kernels.mhc_ops import (
 )
 
 # %%
-HIDDEN = 2048
+HIDDEN = 4096
 DTYPE = torch.bfloat16
 
 DEVICE = 'cuda'
@@ -54,7 +54,7 @@ SINKHORN_ITERS = 20
 SINKHORN_EPS = 1e-6
 QUANTILES = [0.5, 0.2, 0.8]
 PROVIDERS = ['cutile', 'tilelang', 'triton']
-SEQLENS = [512, 1024, 2048, 4096, 8192, 16384]
+SEQLENS = [1024, 2048, 4096, 8192, 16384]
 
 
 # %%
@@ -103,7 +103,8 @@ def build_expand_combine_fwd(provider, s, b, n, C, dtype):
         x_Cn = residual.transpose(-1, -2).contiguous()
         hp = h_post.to(dtype).contiguous()
         hr = h_res.to(dtype).contiguous()
-        return lambda: triton_expand_combine(f, None, hp, x_Cn, hr, n, True)
+        # New triton signature: (f, bias, H_post, x, H_res, use_tf32, fuse_grad_x_acc)
+        return lambda: triton_expand_combine(f, None, hp, x_Cn, hr, True)
     if provider == 'tilelang':
         assert dtype == torch.bfloat16
         hp = h_post.unsqueeze(-1).contiguous().to(torch.float32)
@@ -113,26 +114,29 @@ def build_expand_combine_fwd(provider, s, b, n, C, dtype):
 
 
 def build_projection_fwd(provider, s, b, n, C, dtype):
+    """Projection with RMSNorm `norm_weight` (gamma) — only triton + tilelang.
+
+    cutile's `fused_proj_rms` doesn't accept a learnable RMSNorm weight, so
+    the apples-to-apples comparison is between the two impls that do.
+    """
     torch.manual_seed(0)
     M = s * b
     K = n * C
     N = 2 * n + n * n  # 24 for n=4
     x = torch.randn(M, K, device=DEVICE, dtype=dtype)
+    norm_weight = torch.randn(K, device=DEVICE, dtype=torch.float32)
 
-    if provider == 'cutile':
-        weight = torch.randn(N, K, device=DEVICE, dtype=dtype)
-        return lambda: cutile_proj_rms(x, weight)
     if provider == 'triton':
         phi = torch.randn(N, K, device=DEVICE, dtype=dtype)
-        return lambda: triton_projection(x, phi, True)
+        return lambda: triton_projection(x, phi, norm_weight=norm_weight, use_tf32=True)
     if provider == 'tilelang':
         assert dtype == torch.bfloat16
         assert M % 32 == 0 and K % 256 == 0
         x_nC = x.view(M, n, C)
         fn = torch.randn(N, K, device=DEVICE, dtype=torch.float32)
-        return lambda: tl_projection(x_nC, fn, None, 1e-6,
+        return lambda: tl_projection(x_nC, fn, norm_weight, 1e-6,
                                      fuse_grad_acc=False, n_splits=1)
-    raise ValueError(provider)
+    raise ValueError(f"projection benchmark only supports triton + tilelang (got {provider!r})")
 
 
 # %%
@@ -219,7 +223,8 @@ def build_expand_combine_bwd(provider, s, b, n, C, dtype):
         hp = h_post.to(dtype).contiguous().detach().requires_grad_(True)
         hr = h_res.to(dtype).contiguous().detach().requires_grad_(True)
         ff = f.detach().requires_grad_(True)
-        out = triton_expand_combine(ff, None, hp, x_Cn, hr, n, True)
+        # New triton signature: (f, bias, H_post, x, H_res, use_tf32, fuse_grad_x_acc)
+        out = triton_expand_combine(ff, None, hp, x_Cn, hr, True)
         grad_out = torch.randn_like(out)
         return lambda: torch.autograd.grad(
             out, [ff, hp, x_Cn, hr], grad_outputs=grad_out, retain_graph=True
@@ -239,34 +244,25 @@ def build_expand_combine_bwd(provider, s, b, n, C, dtype):
 
 
 def build_projection_bwd(provider, s, b, n, C, dtype):
+    """Projection bwd with RMSNorm `norm_weight` — only triton + tilelang."""
     torch.manual_seed(0)
     M = s * b
     K = n * C
     N = 2 * n + n * n
 
     x = torch.randn(M, K, device=DEVICE, dtype=dtype)
+    norm_weight = torch.randn(K, device=DEVICE, dtype=torch.float32)
 
-    if provider == 'cutile':
-        weight = torch.randn(N, K, device=DEVICE, dtype=dtype)
-        x_in = x.detach().clone().requires_grad_(True)
-        w_in = weight.detach().clone().requires_grad_(True)
-        proj, r = cutile_proj_rms(x_in, w_in, 1e-6)
-        grad_proj = torch.randn_like(proj)
-        grad_r = torch.randn_like(r)
-        return lambda: torch.autograd.grad(
-            [proj, r], [x_in, w_in],
-            grad_outputs=[grad_proj, grad_r],
-            retain_graph=True,
-        )
     if provider == 'triton':
         phi = torch.randn(N, K, device=DEVICE, dtype=dtype)
         x_req = x.detach().clone().requires_grad_(True)
         phi_req = phi.detach().clone().requires_grad_(True)
-        H, ms = triton_projection(x_req, phi_req, True)
+        nw_req = norm_weight.detach().clone().requires_grad_(True)
+        H, ms = triton_projection(x_req, phi_req, norm_weight=nw_req, use_tf32=True)
         grad_H = torch.randn_like(H)
         grad_ms = torch.randn_like(ms)
         return lambda: torch.autograd.grad(
-            [H, ms], [x_req, phi_req],
+            [H, ms], [x_req, phi_req, nw_req],
             grad_outputs=[grad_H, grad_ms],
             retain_graph=True,
         )
@@ -275,12 +271,13 @@ def build_projection_bwd(provider, s, b, n, C, dtype):
         assert M % 32 == 0 and K % 256 == 0
         x_in = x.view(M, n, C).detach().clone().requires_grad_(True)
         fn = torch.randn(N, K, device=DEVICE, dtype=torch.float32).requires_grad_(True)
-        out = tl_projection(x_in, fn, None, 1e-6, fuse_grad_acc=False, n_splits=1)
+        nw = norm_weight.detach().clone().requires_grad_(True)
+        out = tl_projection(x_in, fn, nw, 1e-6, fuse_grad_acc=False, n_splits=1)
         grad_out = torch.randn_like(out)
         return lambda: torch.autograd.grad(
-            out, [x_in, fn], grad_outputs=grad_out, retain_graph=True
+            out, [x_in, fn, nw], grad_outputs=grad_out, retain_graph=True
         )
-    raise ValueError(provider)
+    raise ValueError(f"projection benchmark only supports triton + tilelang (got {provider!r})")
 
 
 # %%
@@ -289,6 +286,12 @@ def build_projection_bwd(provider, s, b, n, C, dtype):
 # ===========================================================================
 _LINE_NAMES = [p.capitalize() for p in PROVIDERS]
 _STYLES = [('red', '-'), ('green', '-'), ('blue', '-')]
+
+# Projection only compares triton + tilelang because cutile's `fused_proj_rms`
+# doesn't accept a learnable RMSNorm weight (`norm_weight`).
+_PROJ_PROVIDERS = ['tilelang', 'triton']
+_PROJ_LINE_NAMES = [p.capitalize() for p in _PROJ_PROVIDERS]
+_PROJ_STYLES = [('green', '-'), ('blue', '-')]
 
 
 def _make_bench(plot_name):
@@ -300,6 +303,21 @@ def _make_bench(plot_name):
         line_vals=PROVIDERS,
         line_names=_LINE_NAMES,
         styles=_STYLES,
+        ylabel='ms',
+        plot_name=plot_name,
+        args={},
+    )
+
+
+def _make_proj_bench(plot_name):
+    return triton.testing.Benchmark(
+        x_names=['seqlen'],
+        x_vals=SEQLENS,
+        x_log=True,
+        line_arg='provider',
+        line_vals=_PROJ_PROVIDERS,
+        line_names=_PROJ_LINE_NAMES,
+        styles=_PROJ_STYLES,
         ylabel='ms',
         plot_name=plot_name,
         args={},
@@ -323,7 +341,7 @@ def benchmark_sinkhorn_fwd(seqlen, provider):
 
 
 # %%
-benchmark_sinkhorn_fwd.run(show_plots=True, return_df=True)
+benchmark_sinkhorn_fwd.run(show_plots=True, return_df=True, print_data=True)
 
 # %%
 @triton.testing.perf_report(_make_bench(f'mhc-aggregate-fwd-C{HIDDEN}'))
@@ -333,7 +351,7 @@ def benchmark_aggregate_fwd(seqlen, provider):
     )
 
 # %%
-benchmark_aggregate_fwd.run(show_plots=True, return_df=True)
+benchmark_aggregate_fwd.run(show_plots=True, return_df=True, print_data=True)
 
 # %%
 @triton.testing.perf_report(_make_bench(f'mhc-expand_combine-fwd-C{HIDDEN}'))
@@ -344,10 +362,10 @@ def benchmark_expand_combine_fwd(seqlen, provider):
 
 
 # %%
-benchmark_expand_combine_fwd.run(show_plots=True, return_df=True)
+benchmark_expand_combine_fwd.run(show_plots=True, return_df=True, print_data=True)
 
 # %%
-@triton.testing.perf_report(_make_bench(f'mhc-projection-fwd-C{HIDDEN}'))
+@triton.testing.perf_report(_make_proj_bench(f'mhc-projection-fwd-C{HIDDEN}-with-norm-weight'))
 def benchmark_projection_fwd(seqlen, provider):
     return _run_and_time(
         build_projection_fwd(provider, seqlen, BATCH, N_STREAMS, HIDDEN, DTYPE)
@@ -355,7 +373,7 @@ def benchmark_projection_fwd(seqlen, provider):
 
 
 # %%
-benchmark_projection_fwd.run(show_plots=True, return_df=True)
+benchmark_projection_fwd.run(show_plots=True, return_df=True, print_data=True)
 
 # %%
 @triton.testing.perf_report(_make_bench(f'mhc-sinkhorn-bwd-C{HIDDEN}'))
@@ -365,7 +383,7 @@ def benchmark_sinkhorn_bwd(seqlen, provider):
     )
 
 # %%
-benchmark_sinkhorn_bwd.run(show_plots=True, return_df=True)
+benchmark_sinkhorn_bwd.run(show_plots=True, return_df=True, print_data=True)
 
 # %%
 @triton.testing.perf_report(_make_bench(f'mhc-aggregate-bwd-C{HIDDEN}'))
@@ -375,7 +393,7 @@ def benchmark_aggregate_bwd(seqlen, provider):
     )
 
 # %%
-benchmark_aggregate_bwd.run(show_plots=True, return_df=True)
+benchmark_aggregate_bwd.run(show_plots=True, return_df=True, print_data=True)
 
 # %%
 @triton.testing.perf_report(_make_bench(f'mhc-expand_combine-bwd-C{HIDDEN}'))
@@ -385,17 +403,17 @@ def benchmark_expand_combine_bwd(seqlen, provider):
     )
 
 # %%
-benchmark_expand_combine_bwd.run(show_plots=True, return_df=True)
+benchmark_expand_combine_bwd.run(show_plots=True, return_df=True, print_data=True)
 
 # %%
-@triton.testing.perf_report(_make_bench(f'mhc-projection-bwd-C{HIDDEN}'))
+@triton.testing.perf_report(_make_proj_bench(f'mhc-projection-bwd-C{HIDDEN}-with-norm-weight'))
 def benchmark_projection_bwd(seqlen, provider):
     return _run_and_time(
         build_projection_bwd(provider, seqlen, BATCH, N_STREAMS, HIDDEN, DTYPE)
     )
 
 # %%
-benchmark_projection_bwd.run(show_plots=True, return_df=True)
+benchmark_projection_bwd.run(show_plots=True, return_df=True, print_data=True)
 
 # %%
 
