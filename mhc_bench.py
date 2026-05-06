@@ -71,7 +71,7 @@ def run_projection_triton(B, T, n, C, dtype, device):
     x = _get("proj_tr_x",
              lambda: torch.randn(B * T, nC, device=device, requires_grad=True, dtype=dtype))
     phi = _get("proj_tr_phi",
-               lambda: torch.randn(24, nC, dtype=dtype, requires_grad=True, device=device))
+               lambda: torch.randn(24, nC, dtype=torch.float32, requires_grad=True, device=device))
     H, ms = mhc_fused_projection(x, phi)
     H_grad = _get("proj_tr_H_grad", lambda: torch.ones_like(H))
     ms_grad = _get("proj_tr_ms_grad", lambda: torch.ones_like(ms))

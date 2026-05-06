@@ -14,25 +14,22 @@ BENCH="$SCRIPT_DIR/mhc_bench.py"
 #              Model               B     T      C
 CONFIGS=(
     # LLaMA-2 / Mistral class
-    "4  4096  4096"   # LLaMA-7B / Mistral-7B     (h=4096)
-    "2  4096  5120"   # LLaMA-13B                  (h=5120)
-    "1  4096  6656"   # LLaMA-33B                  (h=6656)
-    "1  4096  8192"   # LLaMA-70B / Qwen-72B       (h=8192)
+    # "4  4096  4096"   # LLaMA-7B / Mistral-7B     (h=4096)
+    # "2  4096  5120"   # LLaMA-13B                  (h=5120)
+    # "1  4096  6656"   # LLaMA-33B                  (h=6656)
+    # "1  4096  8192"   # LLaMA-70B / Qwen-72B       (h=8192)
 
-    # LLaMA-3 class
-    "4  8192  4096"   # LLaMA-3-8B                 (h=4096, 8k ctx)
-    "1  8192  4096"   # LLaMA-3-8B                 (h=4096, 8k ctx)
-    "4  8192  7168"   # DeepSeek-V2-Lite / custom  (h=7168, 8k ctx)
-    "1  8192  8192"   # LLaMA-3-70B                (h=8192, 8k ctx)
-    "1  8192 16384"   # LLaMA-3-405B               (h=16384, 8k ctx)
+    # # LLaMA-3 class
+    # "4  8192  4096"   # LLaMA-3-8B                 (h=4096, 8k ctx)
+    # "1  8192  4096"   # LLaMA-3-8B                 (h=4096, 8k ctx)
+    # "4  8192  7168"   # DeepSeek-V2-Lite / custom  (h=7168, 8k ctx)
+    # "1  8192  8192"   # LLaMA-3-70B                (h=8192, 8k ctx)
+    # "1  8192 16384"   # LLaMA-3-405B               (h=16384, 8k ctx)
 
-    # GPT-3 / GPT-NeoX class
-    "8  2048  2560"   # GPT-3-1.3B                 (h=2560)
-    "4  2048  4096"   # GPT-3-6.7B                 (h=4096)
+    # # GPT-3 / GPT-NeoX class
+    # "8  2048  2560"   # GPT-3-1.3B                 (h=2560)
+    # "4  2048  4096"   # GPT-3-6.7B                 (h=4096)
     "1  2048 12288"   # GPT-3-175B                 (h=12288)
-
-    # Nemotron 2B
-    "3  8192  2048"
 )
 
 # nsys insists on writing a .nsys-rep and (with --stats=true) a .sqlite
@@ -90,7 +87,7 @@ for config in "${CONFIGS[@]}"; do
         --force-overwrite=true \
         --output "$TMPBASE" \
         python "$BENCH" \
-            --operation all \
+            --operation projection \
             --B "$B" --T "$T" --C "$C" \
             --warmup 5 \
             --iters 5

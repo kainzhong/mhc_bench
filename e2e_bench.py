@@ -44,7 +44,7 @@ from triton_kernels.mhc_ops import (
 )
 
 # %%
-HIDDEN = 4096
+HIDDEN = 8192
 DTYPE = torch.bfloat16
 
 DEVICE = 'cuda'
@@ -78,13 +78,17 @@ def build_aggregate_fwd(provider, s, b, n, C, dtype):
     x_nC = torch.randn(s, b, n, C, device=DEVICE, dtype=dtype)
     h_pre = torch.randn(s, b, n, device=DEVICE, dtype=torch.float32)
     if provider == 'cutile':
+        # cutile's kernel was tuned for bf16 mix — keep its native dtype.
         return lambda: cutile_aggregate(x_nC, h_pre.to(dtype).contiguous())
     if provider == 'triton':
+        # Pass fp32 mix to match tilelang's hard-coded fp32 requirement →
+        # apples-to-apples vs tilelang. Triton's wrapper accepts fp32 H_pre
+        # (`dtype is torch.float16 or torch.float32` per the docstring).
         x_Cn = x_nC.transpose(-1, -2).contiguous()
-        return lambda: triton_aggregate(x_Cn, h_pre.to(dtype).contiguous(), n, True)
+        return lambda: triton_aggregate(x_Cn, h_pre.contiguous(), n, True)
     if provider == 'tilelang':
         assert dtype == torch.bfloat16
-        mix = h_pre.unsqueeze(-1).contiguous()
+        mix = h_pre.unsqueeze(-1).contiguous()  # fp32, kernel-required
         return lambda: tl_aggregate(x_nC, mix)
     raise ValueError(provider)
 
@@ -96,19 +100,22 @@ def build_expand_combine_fwd(provider, s, b, n, C, dtype):
     f = torch.randn(s, b, C, device=DEVICE, dtype=dtype)
     h_res = torch.randn(s, b, n, n, device=DEVICE, dtype=torch.float32)
     if provider == 'cutile':
+        # cutile native dtype is bf16 for the mix tensors.
         hp = h_post.to(dtype).contiguous()
         hr = h_res.to(dtype).contiguous()
         return lambda: cutile_expand_combine(hr, residual, hp, f, None)
     if provider == 'triton':
+        # Pass fp32 mix to match tilelang (apples-to-apples). Triton's
+        # docstring confirms H_post / H_res accept fp16 or fp32.
         x_Cn = residual.transpose(-1, -2).contiguous()
-        hp = h_post.to(dtype).contiguous()
-        hr = h_res.to(dtype).contiguous()
+        hp = h_post.contiguous()
+        hr = h_res.contiguous()
         # New triton signature: (f, bias, H_post, x, H_res, use_tf32, fuse_grad_x_acc)
         return lambda: triton_expand_combine(f, None, hp, x_Cn, hr, True)
     if provider == 'tilelang':
         assert dtype == torch.bfloat16
-        hp = h_post.unsqueeze(-1).contiguous().to(torch.float32)
-        hr = h_res.contiguous().to(torch.float32)
+        hp = h_post.unsqueeze(-1).contiguous()  # fp32 (kernel-required)
+        hr = h_res.contiguous()                 # fp32 (kernel-required)
         return lambda: tl_expand_combine(f, residual, hp, hr)
     raise ValueError(provider)
 
@@ -127,7 +134,10 @@ def build_projection_fwd(provider, s, b, n, C, dtype):
     norm_weight = torch.randn(K, device=DEVICE, dtype=torch.float32)
 
     if provider == 'triton':
-        phi = torch.randn(N, K, device=DEVICE, dtype=dtype)
+        # phi as fp32 to match tilelang's required fn dtype (apples-to-apples).
+        # Triton's docstring lists fp16/fp32; with norm_weight provided the
+        # kernel promotes phi to fp32 internally anyway.
+        phi = torch.randn(N, K, device=DEVICE, dtype=torch.float32)
         return lambda: triton_projection(x, phi, norm_weight=norm_weight, use_tf32=True)
     if provider == 'tilelang':
         assert dtype == torch.bfloat16
@@ -178,14 +188,15 @@ def build_aggregate_bwd(provider, s, b, n, C, dtype):
 
     if provider == 'cutile':
         x_in = x_nC.detach().clone().requires_grad_(True)
-        h = h_pre.to(dtype).contiguous().detach().requires_grad_(True)
+        h = h_pre.to(dtype).contiguous().detach().requires_grad_(True)  # bf16 (cutile native)
         out = cutile_aggregate(x_in, h)
         return lambda: torch.autograd.grad(
             out, [x_in, h], grad_outputs=grad_out, retain_graph=True
         )
     if provider == 'triton':
         x_Cn = x_nC.transpose(-1, -2).contiguous().detach().requires_grad_(True)
-        h = h_pre.to(dtype).contiguous().detach().requires_grad_(True)
+        # fp32 mix to match tilelang's required dtype (apples-to-apples).
+        h = h_pre.contiguous().detach().requires_grad_(True)
         out = triton_aggregate(x_Cn, h, n, True)
         return lambda: torch.autograd.grad(
             out, [x_Cn, h], grad_outputs=grad_out, retain_graph=True
@@ -209,6 +220,7 @@ def build_expand_combine_bwd(provider, s, b, n, C, dtype):
     h_res = torch.randn(s, b, n, n, device=DEVICE, dtype=torch.float32)
 
     if provider == 'cutile':
+        # cutile native dtype: bf16 mix.
         hr = h_res.to(dtype).contiguous().detach().requires_grad_(True)
         res_in = residual.detach().clone().requires_grad_(True)
         hp = h_post.to(dtype).contiguous().detach().requires_grad_(True)
@@ -219,9 +231,10 @@ def build_expand_combine_bwd(provider, s, b, n, C, dtype):
             out, [hr, res_in, hp, f_in], grad_outputs=grad_out, retain_graph=True
         )
     if provider == 'triton':
+        # fp32 mix to match tilelang (apples-to-apples).
         x_Cn = residual.transpose(-1, -2).contiguous().detach().requires_grad_(True)
-        hp = h_post.to(dtype).contiguous().detach().requires_grad_(True)
-        hr = h_res.to(dtype).contiguous().detach().requires_grad_(True)
+        hp = h_post.contiguous().detach().requires_grad_(True)
+        hr = h_res.contiguous().detach().requires_grad_(True)
         ff = f.detach().requires_grad_(True)
         # New triton signature: (f, bias, H_post, x, H_res, use_tf32, fuse_grad_x_acc)
         out = triton_expand_combine(ff, None, hp, x_Cn, hr, True)
@@ -254,7 +267,8 @@ def build_projection_bwd(provider, s, b, n, C, dtype):
     norm_weight = torch.randn(K, device=DEVICE, dtype=torch.float32)
 
     if provider == 'triton':
-        phi = torch.randn(N, K, device=DEVICE, dtype=dtype)
+        # phi as fp32 to match tilelang's required fn dtype.
+        phi = torch.randn(N, K, device=DEVICE, dtype=torch.float32)
         x_req = x.detach().clone().requires_grad_(True)
         phi_req = phi.detach().clone().requires_grad_(True)
         nw_req = norm_weight.detach().clone().requires_grad_(True)
@@ -331,38 +345,38 @@ def _run_and_time(fn):
     return ms, max_ms, min_ms
 
 
-# %%
-# ---- forward ---------------------------------------------------------------
-@triton.testing.perf_report(_make_bench(f'mhc-sinkhorn-fwd-C{HIDDEN}'))
-def benchmark_sinkhorn_fwd(seqlen, provider):
-    return _run_and_time(
-        build_sinkhorn_fwd(provider, seqlen, BATCH, N_STREAMS, SINKHORN_ITERS)
-    )
+# # %%
+# # ---- forward ---------------------------------------------------------------
+# @triton.testing.perf_report(_make_bench(f'mhc-sinkhorn-fwd-C{HIDDEN}'))
+# def benchmark_sinkhorn_fwd(seqlen, provider):
+#     return _run_and_time(
+#         build_sinkhorn_fwd(provider, seqlen, BATCH, N_STREAMS, SINKHORN_ITERS)
+#     )
 
 
-# %%
-benchmark_sinkhorn_fwd.run(show_plots=True, return_df=True, print_data=True)
+# # %%
+# benchmark_sinkhorn_fwd.run(show_plots=True, return_df=True, print_data=True)
 
-# %%
-@triton.testing.perf_report(_make_bench(f'mhc-aggregate-fwd-C{HIDDEN}'))
-def benchmark_aggregate_fwd(seqlen, provider):
-    return _run_and_time(
-        build_aggregate_fwd(provider, seqlen, BATCH, N_STREAMS, HIDDEN, DTYPE)
-    )
+# # %%
+# @triton.testing.perf_report(_make_bench(f'mhc-aggregate-fwd-C{HIDDEN}'))
+# def benchmark_aggregate_fwd(seqlen, provider):
+#     return _run_and_time(
+#         build_aggregate_fwd(provider, seqlen, BATCH, N_STREAMS, HIDDEN, DTYPE)
+#     )
 
-# %%
-benchmark_aggregate_fwd.run(show_plots=True, return_df=True, print_data=True)
+# # %%
+# benchmark_aggregate_fwd.run(show_plots=True, return_df=True, print_data=True)
 
-# %%
-@triton.testing.perf_report(_make_bench(f'mhc-expand_combine-fwd-C{HIDDEN}'))
-def benchmark_expand_combine_fwd(seqlen, provider):
-    return _run_and_time(
-        build_expand_combine_fwd(provider, seqlen, BATCH, N_STREAMS, HIDDEN, DTYPE)
-    )
+# # %%
+# @triton.testing.perf_report(_make_bench(f'mhc-expand_combine-fwd-C{HIDDEN}'))
+# def benchmark_expand_combine_fwd(seqlen, provider):
+#     return _run_and_time(
+#         build_expand_combine_fwd(provider, seqlen, BATCH, N_STREAMS, HIDDEN, DTYPE)
+#     )
 
 
-# %%
-benchmark_expand_combine_fwd.run(show_plots=True, return_df=True, print_data=True)
+# # %%
+# benchmark_expand_combine_fwd.run(show_plots=True, return_df=True, print_data=True)
 
 # %%
 @triton.testing.perf_report(_make_proj_bench(f'mhc-projection-fwd-C{HIDDEN}-with-norm-weight'))
@@ -375,45 +389,45 @@ def benchmark_projection_fwd(seqlen, provider):
 # %%
 benchmark_projection_fwd.run(show_plots=True, return_df=True, print_data=True)
 
-# %%
-@triton.testing.perf_report(_make_bench(f'mhc-sinkhorn-bwd-C{HIDDEN}'))
-def benchmark_sinkhorn_bwd(seqlen, provider):
-    return _run_and_time(
-        build_sinkhorn_bwd(provider, seqlen, BATCH, N_STREAMS, SINKHORN_ITERS)
-    )
+# # %%
+# @triton.testing.perf_report(_make_bench(f'mhc-sinkhorn-bwd-C{HIDDEN}'))
+# def benchmark_sinkhorn_bwd(seqlen, provider):
+#     return _run_and_time(
+#         build_sinkhorn_bwd(provider, seqlen, BATCH, N_STREAMS, SINKHORN_ITERS)
+#     )
 
-# %%
-benchmark_sinkhorn_bwd.run(show_plots=True, return_df=True, print_data=True)
+# # %%
+# benchmark_sinkhorn_bwd.run(show_plots=True, return_df=True, print_data=True)
 
-# %%
-@triton.testing.perf_report(_make_bench(f'mhc-aggregate-bwd-C{HIDDEN}'))
-def benchmark_aggregate_bwd(seqlen, provider):
-    return _run_and_time(
-        build_aggregate_bwd(provider, seqlen, BATCH, N_STREAMS, HIDDEN, DTYPE)
-    )
+# # %%
+# @triton.testing.perf_report(_make_bench(f'mhc-aggregate-bwd-C{HIDDEN}'))
+# def benchmark_aggregate_bwd(seqlen, provider):
+#     return _run_and_time(
+#         build_aggregate_bwd(provider, seqlen, BATCH, N_STREAMS, HIDDEN, DTYPE)
+#     )
 
-# %%
-benchmark_aggregate_bwd.run(show_plots=True, return_df=True, print_data=True)
+# # %%
+# benchmark_aggregate_bwd.run(show_plots=True, return_df=True, print_data=True)
 
-# %%
-@triton.testing.perf_report(_make_bench(f'mhc-expand_combine-bwd-C{HIDDEN}'))
-def benchmark_expand_combine_bwd(seqlen, provider):
-    return _run_and_time(
-        build_expand_combine_bwd(provider, seqlen, BATCH, N_STREAMS, HIDDEN, DTYPE)
-    )
+# # %%
+# @triton.testing.perf_report(_make_bench(f'mhc-expand_combine-bwd-C{HIDDEN}'))
+# def benchmark_expand_combine_bwd(seqlen, provider):
+#     return _run_and_time(
+#         build_expand_combine_bwd(provider, seqlen, BATCH, N_STREAMS, HIDDEN, DTYPE)
+#     )
 
-# %%
-benchmark_expand_combine_bwd.run(show_plots=True, return_df=True, print_data=True)
+# # %%
+# benchmark_expand_combine_bwd.run(show_plots=True, return_df=True, print_data=True)
 
-# %%
-@triton.testing.perf_report(_make_proj_bench(f'mhc-projection-bwd-C{HIDDEN}-with-norm-weight'))
-def benchmark_projection_bwd(seqlen, provider):
-    return _run_and_time(
-        build_projection_bwd(provider, seqlen, BATCH, N_STREAMS, HIDDEN, DTYPE)
-    )
+# # %%
+# @triton.testing.perf_report(_make_proj_bench(f'mhc-projection-bwd-C{HIDDEN}-with-norm-weight'))
+# def benchmark_projection_bwd(seqlen, provider):
+#     return _run_and_time(
+#         build_projection_bwd(provider, seqlen, BATCH, N_STREAMS, HIDDEN, DTYPE)
+#     )
 
-# %%
-benchmark_projection_bwd.run(show_plots=True, return_df=True, print_data=True)
+# # %%
+# benchmark_projection_bwd.run(show_plots=True, return_df=True, print_data=True)
 
 # %%
 

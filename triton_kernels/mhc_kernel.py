@@ -15,8 +15,8 @@ import triton.language as tl
 
 MAX_GRID_DIM_Y = 65535  # Maximum grid dimension in Y direction for current CUDA architectures
 
-def nearest_power_of_2(x):
-    return 1 << (x - 1).bit_length()
+def align_to(x, alignment):
+    return ((x + alignment-1) // alignment) * alignment
 
 def get_device_sms():
     """
@@ -50,17 +50,17 @@ def projection_prune_fwd(configs, named_args, **kwargs):
     M = named_args.get("M", kwargs.get("M", None))
     K = named_args.get("K", kwargs.get("K", None))
 
-    block_m = [64, 128]
-    block_k = max(128, nearest_power_of_2(K))
+    block_m = [8, 16, 32, 64]
+    block_k = align_to(K, 32)
 
     # Use Split-K only if determinism is not enforced and M is not large enough to effectively parallelize
     # sms * 4 is a empirical threshold I found via experiments for non-split-K starts to be better
     if not DETERMINISTIC and triton.cdiv(M, block_m[0]) < get_device_sms() * 4:
         pruned_configs = configs
     else:
-        step_k = [32]
-        warps = [2, 4]
-        stages = [3, 4, 5, 6]
+        step_k = [32, 64, 128]
+        warps = [1, 2, 4]
+        stages = [2, 3, 4]
 
         pruned_configs = []
         for bm, sk, w, s in itertools.product(block_m, step_k, warps, stages):
@@ -126,7 +126,7 @@ def _mhc_projection_fwd_fused(
     tl.assume(stride_ms == 1)
     tl.assume(stride_norm_weight == 1)
 
-    tl.assume(BLOCK_SIZE_M % 32 == 0)
+    tl.assume(BLOCK_SIZE_M % 8 == 0)
     tl.assume(BLOCK_SIZE_K % 32 == 0)
     tl.assume(BLOCK_SIZE_N == 32)
 
@@ -327,7 +327,7 @@ def projection_prune_bwd_dphi(configs, named_args, **kwargs):
     K = named_args.get("K", kwargs.get("K", None))
 
     block_k = [128]
-    block_m = max(128, nearest_power_of_2(M))
+    block_m = align_to(M, 128)
 
     # Use split-M only if determinism is not enforced and K is large enough to effectively parallelize
     if not DETERMINISTIC and triton.cdiv(K, block_k[0]) < get_device_sms() * 4:
@@ -1073,7 +1073,7 @@ def aggregate_prune_bwd(configs, named_args, **kwargs):
     C = named_args.get("C", kwargs.get("C", None))
 
     block_m = [4]
-    block_c = max(256, nearest_power_of_2(C))
+    block_c = align_to(C, 64)
 
     # Use Split-K only if determinism is not enforced and M is not large enough to effectively parallelize
     if not DETERMINISTIC and triton.cdiv(M, block_m[0]) < get_device_sms() * 4:
@@ -1383,7 +1383,7 @@ def expand_combine_prune_bwd(configs, named_args, **kwargs):
     C = named_args.get("C", kwargs.get("C", None))
 
     block_m = [4]
-    block_c = max(256, nearest_power_of_2(C))
+    block_c = align_to(C, 32)
 
     # Use Split-K only if determinism is not enforced and M is not large enough to effectively parallelize
     # sms * 8 is a empirical threshold I found via experiments for non-split-K starts to be better
