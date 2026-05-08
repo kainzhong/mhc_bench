@@ -53,7 +53,7 @@ BATCH = 1
 SINKHORN_ITERS = 20
 SINKHORN_EPS = 1e-6
 QUANTILES = [0.5, 0.2, 0.8]
-PROVIDERS = ['cutile', 'tilelang', 'triton']
+PROVIDERS = ['tilelang', 'triton']
 SEQLENS = [1024, 2048, 4096, 8192, 16384]
 
 
@@ -257,32 +257,40 @@ def build_expand_combine_bwd(provider, s, b, n, C, dtype):
 
 
 def build_projection_bwd(provider, s, b, n, C, dtype):
-    """Projection bwd with RMSNorm `norm_weight` — only triton + tilelang."""
+    """Projection bwd with RMSNorm `norm_weight` — only triton + tilelang.
+
+    Aligned I/O across providers:
+      inputs:  x bf16 (M*K elements), phi/fn fp32 (N, K), norm_weight fp32 (K,)
+      grad_out: fp32 (M, N) — N=24 for n=4
+
+    Triton's wrapper returns H padded to (M, 32) plus an auxiliary `ms` (M,). To
+    match tilelang's single (M, N) output we slice H[:, :N] and drop grad_ms.
+    """
     torch.manual_seed(0)
     M = s * b
     K = n * C
     N = 2 * n + n * n
 
     if provider == 'triton':
-        x = torch.randn(M, K, device=DEVICE, dtype=dtype)
-        norm_weight = torch.randn(K, device=DEVICE, dtype=torch.float32)
-        # phi as fp32 to match tilelang's required fn dtype.
-        phi = torch.randn(N, K, device=DEVICE, dtype=torch.float32)
-        H, ms = triton_projection(x, phi, norm_weight=norm_weight, use_tf32=True)
-        grad_H = torch.randn_like(H)
-        grad_ms = torch.randn_like(ms)
+        x = torch.randn(M, K, device=DEVICE, dtype=dtype, requires_grad=True)
+        phi = torch.randn(N, K, device=DEVICE, dtype=torch.float32, requires_grad=True)
+        norm_weight = torch.randn(K, device=DEVICE, dtype=torch.float32, requires_grad=True)
+        H, _ = triton_projection(x, phi, norm_weight=norm_weight, use_tf32=True)
+        H_valid = H[:, :N]
+        grad_out = torch.randn_like(H_valid)
         return lambda: torch.autograd.grad(
-            [H, ms], [x, phi, norm_weight],
-            grad_outputs=[grad_H, grad_ms],
+            H_valid, [x, phi, norm_weight],
+            grad_outputs=grad_out,
             retain_graph=True,
         )
     if provider == 'tilelang':
         assert dtype == torch.bfloat16
         assert M % 32 == 0 and K % 256 == 0
-        x_in = torch.randn(M, K, device=DEVICE, dtype=dtype)
-        fn = torch.randn(N, K, device=DEVICE, dtype=torch.float32).requires_grad_(True)
-        nw = torch.randn(K, device=DEVICE, dtype=torch.float32)
-        out = tl_projection(x_in, fn, nw, 1e-6, fuse_grad_acc=False, n_splits=1)
+        x_in = torch.randn(M, K, device=DEVICE, dtype=dtype, requires_grad=True)
+        fn = torch.randn(N, K, device=DEVICE, dtype=torch.float32, requires_grad=True)
+        nw = torch.randn(K, device=DEVICE, dtype=torch.float32, requires_grad=True)
+        x_nC = x_in.view(M, n, C)
+        out = tl_projection(x_nC, fn, nw, 1e-6, fuse_grad_acc=False, n_splits=1)
         grad_out = torch.randn_like(out)
         return lambda: torch.autograd.grad(
             out, [x_in, fn, nw], grad_outputs=grad_out, retain_graph=True
@@ -295,7 +303,7 @@ def build_projection_bwd(provider, s, b, n, C, dtype):
 # perf_report benchmarks. One pair (fwd, bwd) per op.
 # ===========================================================================
 _LINE_NAMES = [p.capitalize() for p in PROVIDERS]
-_STYLES = [('red', '-'), ('green', '-'), ('blue', '-')]
+_STYLES = [('green', '-'), ('blue', '-')]
 
 # Projection only compares triton + tilelang because cutile's `fused_proj_rms`
 # doesn't accept a learnable RMSNorm weight (`norm_weight`).
