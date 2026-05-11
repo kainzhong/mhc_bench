@@ -67,7 +67,7 @@ def build_sinkhorn_fwd(provider, s, b, n, iters):
     if provider == 'cutile':
         return lambda: cutile_sinkhorn(h_res, iters)
     if provider == 'triton':
-        return lambda: triton_sinkhorn(h_res, n=n, recompute_hist=True, iters=iters)
+        return lambda: triton_sinkhorn(h_res, n=n, iters=iters)
     if provider == 'tilelang':
         return lambda: tl_sinkhorn(h_res, repeat=iters, eps=SINKHORN_EPS)
     raise ValueError(provider)
@@ -167,7 +167,7 @@ def build_sinkhorn_bwd(provider, s, b, n, iters):
         )
     if provider == 'triton':
         inp = h_res.detach().clone().requires_grad_(True)
-        out = triton_sinkhorn(inp, n=n, recompute_hist=True, iters=iters)
+        out = triton_sinkhorn(inp, n=n, iters=iters)
         return lambda: torch.autograd.grad(
             out, [inp], grad_outputs=grad_out, retain_graph=True
         )
