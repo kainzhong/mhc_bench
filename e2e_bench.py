@@ -361,37 +361,37 @@ def benchmark_sinkhorn_fwd(seqlen, provider):
 # %%
 benchmark_sinkhorn_fwd.run(show_plots=True, return_df=True, print_data=True)
 
-# %%
-@triton.testing.perf_report(_make_bench(f'mhc-aggregate-fwd-C{HIDDEN}'))
-def benchmark_aggregate_fwd(seqlen, provider):
-    return _run_and_time(
-        build_aggregate_fwd(provider, seqlen, BATCH, N_STREAMS, HIDDEN, DTYPE)
-    )
+# # %%
+# @triton.testing.perf_report(_make_bench(f'mhc-aggregate-fwd-C{HIDDEN}'))
+# def benchmark_aggregate_fwd(seqlen, provider):
+#     return _run_and_time(
+#         build_aggregate_fwd(provider, seqlen, BATCH, N_STREAMS, HIDDEN, DTYPE)
+#     )
 
-# %%
-benchmark_aggregate_fwd.run(show_plots=True, return_df=True, print_data=True)
+# # %%
+# benchmark_aggregate_fwd.run(show_plots=True, return_df=True, print_data=True)
 
-# %%
-@triton.testing.perf_report(_make_bench(f'mhc-expand_combine-fwd-C{HIDDEN}'))
-def benchmark_expand_combine_fwd(seqlen, provider):
-    return _run_and_time(
-        build_expand_combine_fwd(provider, seqlen, BATCH, N_STREAMS, HIDDEN, DTYPE)
-    )
-
-
-# %%
-benchmark_expand_combine_fwd.run(show_plots=True, return_df=True, print_data=True)
-
-# %%
-@triton.testing.perf_report(_make_proj_bench(f'mhc-projection-fwd-C{HIDDEN}-with-norm-weight'))
-def benchmark_projection_fwd(seqlen, provider):
-    return _run_and_time(
-        build_projection_fwd(provider, seqlen, BATCH, N_STREAMS, HIDDEN, DTYPE)
-    )
+# # %%
+# @triton.testing.perf_report(_make_bench(f'mhc-expand_combine-fwd-C{HIDDEN}'))
+# def benchmark_expand_combine_fwd(seqlen, provider):
+#     return _run_and_time(
+#         build_expand_combine_fwd(provider, seqlen, BATCH, N_STREAMS, HIDDEN, DTYPE)
+#     )
 
 
-# %%
-benchmark_projection_fwd.run(show_plots=True, return_df=True, print_data=True)
+# # %%
+# benchmark_expand_combine_fwd.run(show_plots=True, return_df=True, print_data=True)
+
+# # %%
+# @triton.testing.perf_report(_make_proj_bench(f'mhc-projection-fwd-C{HIDDEN}-with-norm-weight'))
+# def benchmark_projection_fwd(seqlen, provider):
+#     return _run_and_time(
+#         build_projection_fwd(provider, seqlen, BATCH, N_STREAMS, HIDDEN, DTYPE)
+#     )
+
+
+# # %%
+# benchmark_projection_fwd.run(show_plots=True, return_df=True, print_data=True)
 
 # %%
 @triton.testing.perf_report(_make_bench(f'mhc-sinkhorn-bwd-C{HIDDEN}'))
@@ -403,35 +403,35 @@ def benchmark_sinkhorn_bwd(seqlen, provider):
 # %%
 benchmark_sinkhorn_bwd.run(show_plots=True, return_df=True, print_data=True)
 
-# %%
-@triton.testing.perf_report(_make_bench(f'mhc-aggregate-bwd-C{HIDDEN}'))
-def benchmark_aggregate_bwd(seqlen, provider):
-    return _run_and_time(
-        build_aggregate_bwd(provider, seqlen, BATCH, N_STREAMS, HIDDEN, DTYPE)
-    )
+# # %%
+# @triton.testing.perf_report(_make_bench(f'mhc-aggregate-bwd-C{HIDDEN}'))
+# def benchmark_aggregate_bwd(seqlen, provider):
+#     return _run_and_time(
+#         build_aggregate_bwd(provider, seqlen, BATCH, N_STREAMS, HIDDEN, DTYPE)
+#     )
 
-# %%
-benchmark_aggregate_bwd.run(show_plots=True, return_df=True, print_data=True)
+# # %%
+# benchmark_aggregate_bwd.run(show_plots=True, return_df=True, print_data=True)
 
-# %%
-@triton.testing.perf_report(_make_bench(f'mhc-expand_combine-bwd-C{HIDDEN}'))
-def benchmark_expand_combine_bwd(seqlen, provider):
-    return _run_and_time(
-        build_expand_combine_bwd(provider, seqlen, BATCH, N_STREAMS, HIDDEN, DTYPE)
-    )
+# # %%
+# @triton.testing.perf_report(_make_bench(f'mhc-expand_combine-bwd-C{HIDDEN}'))
+# def benchmark_expand_combine_bwd(seqlen, provider):
+#     return _run_and_time(
+#         build_expand_combine_bwd(provider, seqlen, BATCH, N_STREAMS, HIDDEN, DTYPE)
+#     )
 
-# %%
-benchmark_expand_combine_bwd.run(show_plots=True, return_df=True, print_data=True)
+# # %%
+# benchmark_expand_combine_bwd.run(show_plots=True, return_df=True, print_data=True)
 
-# %%
-@triton.testing.perf_report(_make_proj_bench(f'mhc-projection-bwd-C{HIDDEN}-with-norm-weight'))
-def benchmark_projection_bwd(seqlen, provider):
-    return _run_and_time(
-        build_projection_bwd(provider, seqlen, BATCH, N_STREAMS, HIDDEN, DTYPE)
-    )
+# # %%
+# @triton.testing.perf_report(_make_proj_bench(f'mhc-projection-bwd-C{HIDDEN}-with-norm-weight'))
+# def benchmark_projection_bwd(seqlen, provider):
+#     return _run_and_time(
+#         build_projection_bwd(provider, seqlen, BATCH, N_STREAMS, HIDDEN, DTYPE)
+#     )
 
-# %%
-benchmark_projection_bwd.run(show_plots=True, return_df=True, print_data=True)
+# # %%
+# benchmark_projection_bwd.run(show_plots=True, return_df=True, print_data=True)
 
 
 
