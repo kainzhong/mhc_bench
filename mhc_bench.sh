@@ -80,23 +80,32 @@ for config in "${CONFIGS[@]}"; do
     TMPBASE=$(mktemp -u /tmp/nsys_mhc_XXXXXX)
 
     echo "=== B=$B T=$T C=$C ===" | tee "$OUTFILE"
-    run_with_retry "$OUTFILE" nsys profile \
-        --trace=cuda,nvtx \
-        --cuda-memory-usage=false \
-        --cpuctxsw=none \
-        --capture-range=cudaProfilerApi \
-        --capture-range-end=repeat \
-        --stats=true \
-        --force-overwrite=true \
-        --output "$TMPBASE" \
-        python "$BENCH" \
-            --operation all \
-            --B "$B" --T "$T" --C "$C" \
-            --warmup 5 \
-            --iters 5
-
-    # Clean up the artifacts we didn't ask for.
-    rm -f "$TMPBASE.nsys-rep" "$TMPBASE.sqlite" "$TMPBASE.qdstrm"
+    # Run nsys once per framework so each capture window holds a single
+    # cudaProfilerStart/Stop pair. Multi-range (--capture-range-end=repeat)
+    # crashes the nsys agent after the first Stop and silently drops the
+    # rest. Each --framework run also has its own warmup so autotune kernel
+    # launches (e.g. 38k instances of _mhc_aggregate_bwd) stay outside the
+    # capture window and don't dilute Avg.
+    for FW in triton tilelang; do
+        echo "" >> "$OUTFILE"
+        echo "--- framework=$FW ---" | tee -a "$OUTFILE"
+        run_with_retry "$OUTFILE" nsys profile \
+            --trace=cuda,nvtx \
+            --cuda-memory-usage=false \
+            --cpuctxsw=none \
+            --capture-range=cudaProfilerApi \
+            --capture-range-end=stop \
+            --stats=true \
+            --force-overwrite=true \
+            --output "${TMPBASE}_${FW}" \
+            python "$BENCH" \
+                --operation all \
+                --framework "$FW" \
+                --B "$B" --T "$T" --C "$C" \
+                --warmup 5 \
+                --iters 5
+        rm -f "${TMPBASE}_${FW}.nsys-rep" "${TMPBASE}_${FW}.sqlite" "${TMPBASE}_${FW}.qdstrm"
+    done
 
     # OUTFILE="$SCRIPT_DIR/profile/ncu_mhc_B${B}_T${T}_C${C}.txt"
     # run_with_retry "$OUTFILE" ncu \

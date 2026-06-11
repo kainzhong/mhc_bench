@@ -28,7 +28,6 @@ env/
 .claude
 
 # Benchmark / profile outputs
-profile/
 bench_plots/
 output.png
 *.ncu-rep

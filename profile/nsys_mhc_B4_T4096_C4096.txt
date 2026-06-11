@@ -1,221 +1,20 @@
 === B=4 T=4096 C=4096 ===
-Running all with B=4, T=4096
-2026-04-26 14:40:42  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_sinkhorn_kernel` with `out_idx=None`
-2026-04-26 14:40:46  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_sinkhorn_kernel`
-2026-04-26 14:40:48  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_sinkhorn_backward_kernel` with `out_idx=None`
-2026-04-26 14:40:58  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_sinkhorn_backward_kernel`
-2026-04-26 14:41:02  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `_mhc_pre_norm_fn_fwd_mul_kernel` with `out_idx=None`
-2026-04-26 14:41:07  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `_mhc_pre_norm_fn_fwd_mul_kernel`
-2026-04-26 14:41:10  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `_mhc_pre_norm_fn_fwd_norm_kernel` with `out_idx=None`
-2026-04-26 14:41:14  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `_mhc_pre_norm_fn_fwd_norm_kernel`
-2026-04-26 14:41:16  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `_mhc_pre_norm_fn_bwd_norm_kernel` with `out_idx=None`
-2026-04-26 14:41:20  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `_mhc_pre_norm_fn_bwd_norm_kernel`
-2026-04-26 14:41:22  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `_mhc_pre_norm_fn_bwd_mul_kernel` with `out_idx=None`
-2026-04-26 14:41:29  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `_mhc_pre_norm_fn_bwd_mul_kernel`
-2026-04-26 14:41:32  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_pre_split_mixes_fwd_kernel` with `out_idx=None`
-2026-04-26 14:41:36  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_pre_split_mixes_fwd_kernel`
-2026-04-26 14:41:37  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_pre_split_mixes_bwd_kernel` with `out_idx=None`
-2026-04-26 14:41:42  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_pre_split_mixes_bwd_kernel`
-2026-04-26 14:41:46  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `_mhc_pre_apply_mix_fwd_kernel` with `out_idx=None`
-2026-04-26 14:41:51  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `_mhc_pre_apply_mix_fwd_kernel`
-2026-04-26 14:41:53  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `_mhc_pre_apply_mix_bwd_kernel` with `out_idx=[4]`
-2026-04-26 14:42:00  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `_mhc_pre_apply_mix_bwd_kernel`
-2026-04-26 14:42:03  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `_mhc_post_fwd_kernel` with `out_idx=None`
-2026-04-26 14:42:09  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `_mhc_post_fwd_kernel`
-2026-04-26 14:42:11  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `_mhc_post_bwd_kernel` with `out_idx=[5, 6, 7, 8]`
-2026-04-26 14:42:24  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `_mhc_post_bwd_kernel`
-Capture range started in the application.
-Capture range ended in the application.
-Generating '/tmp/nsys-report-4d46.qdstrm'
-Press Ctrl-C to stop symbol files downloading
-[8/141] Downloaded symbol information for /usr/lib/x86_64-linux-gnu/librt.so.1
-[18/141] Downloaded symbol information for /usr/lib/x86_64-linux-gnu/libbz2.so.1.0.4
-[25/141] Downloaded symbol information for /usr/lib/python3.12/lib-dynload/mmap.cpython-312-x86_64-linux-gnu.so
-[27/141] Downloaded symbol information for /usr/lib/x86_64-linux-gnu/libc.so.6
-[29/141] Downloaded symbol information for /usr/lib/python3.12/lib-dynload/_lsprof.cpython-312-x86_64-linux-gnu.so
-[37/141] Downloaded symbol information for /usr/lib/python3.12/lib-dynload/resource.cpython-312-x86_64-linux-gnu.so
-[38/141] Downloaded symbol information for /usr/lib/python3.12/lib-dynload/_json.cpython-312-x86_64-linux-gnu.so
-[45/141] Downloaded symbol information for /usr/lib/x86_64-linux-gnu/libpthread.so.0
-[53/141] Downloaded symbol information for /usr/lib/python3.12/lib-dynload/_posixshmem.cpython-312-x86_64-linux-gnu.so
-[62/141] Downloaded symbol information for /usr/lib/python3.12/lib-dynload/_multiprocessing.cpython-312-x86_64-linux-gnu.so
-[64/141] Downloaded symbol information for /usr/lib/python3.12/lib-dynload/_asyncio.cpython-312-x86_64-linux-gnu.so
-[71/141] Downloaded symbol information for /usr/lib/python3.12/lib-dynload/readline.cpython-312-x86_64-linux-gnu.so
-[73/141] Downloaded symbol information for /usr/lib/x86_64-linux-gnu/libm.so.6
-[75/141] Downloaded symbol information for /usr/lib/python3.12/lib-dynload/_hashlib.cpython-312-x86_64-linux-gnu.so
-[77/141] Downloaded symbol information for /usr/lib/python3.12/lib-dynload/_sqlite3.cpython-312-x86_64-linux-gnu.so
-[87/141] Downloaded symbol information for /usr/lib/python3.12/lib-dynload/_ssl.cpython-312-x86_64-linux-gnu.so
-[88/141] Downloaded symbol information for /usr/lib/x86_64-linux-gnu/libz.so.1.3
-[91/141] Downloaded symbol information for /usr/lib/python3.12/lib-dynload/_queue.cpython-312-x86_64-linux-gnu.so
-[93/141] Downloaded symbol information for /usr/lib/python3.12/lib-dynload/_ctypes.cpython-312-x86_64-linux-gnu.so
-[94/141] Downloaded symbol information for /usr/lib/python3.12/lib-dynload/_bz2.cpython-312-x86_64-linux-gnu.so
-[103/141] Downloaded symbol information for /usr/lib/python3.12/lib-dynload/_lzma.cpython-312-x86_64-linux-gnu.so
-[104/141] Downloaded symbol information for /usr/lib/python3.12/lib-dynload/_xxsubinterpreters.cpython-312-x86_64-linux-gnu.so
-[118/141] Downloaded symbol information for /usr/lib/x86_64-linux-gnu/libpython3.12.so.1.0
-[121/141] Downloaded symbol information for /usr/lib/python3.12/lib-dynload/_contextvars.cpython-312-x86_64-linux-gnu.so
-[129/141] Downloaded symbol information for /usr/lib/python3.12/lib-dynload/_decimal.cpython-312-x86_64-linux-gnu.so
-[132/141] Downloaded symbol information for /usr/lib/x86_64-linux-gnu/libutil.so.1
-[134/141] Downloaded symbol information for /usr/bin/python3.12
-[136/141] Downloaded symbol information for /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
-[139/141] Downloaded symbol information for /usr/lib/x86_64-linux-gnu/libdl.so.2
-Capture range started in the application.
-Capture range ended in the application.
-Generating '/tmp/nsys-report-4dbc.qdstrm'
-Press Ctrl-C to stop symbol files downloading
-Capture range started in the application.
-Capture range ended in the application.
-Generating '/tmp/nsys-report-20c9.qdstrm'
-Press Ctrl-C to stop symbol files downloading
-[ 1/21] [0%                          ] nsys_mhc_ubeNV4.1.nsys-repProcessing events...
-[ 1/21] [0%                          ] nsys_mhc_ubeNV4.1.nsys-rep[ 1/21] [6%                          ] nsys_mhc_ubeNV4.1.nsys-rep[ 1/21] [==========49%               ] nsys_mhc_ubeNV4.1.nsys-rep[ 1/21] [======================92%   ] nsys_mhc_ubeNV4.1.nsys-rep[ 1/21] [=======================93%  ] nsys_mhc_ubeNV4.1.nsys-rep[ 1/21] [=======================94%  ] nsys_mhc_ubeNV4.1.nsys-rep[ 1/21] [=======================95%  ] nsys_mhc_ubeNV4.1.nsys-rep[ 1/21] [========================100%] nsys_mhc_ubeNV4.1.nsys-rep[ 1/21] [========================100%] nsys_mhc_ubeNV4.1.nsys-rep
-[ 2/21] [0%                          ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [1%                          ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [2%                          ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [3%                          ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [4%                          ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [5%                          ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [6%                          ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [7%                          ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [8%                          ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [9%                          ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [10%                         ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [11%                         ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [12%                         ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [13%                         ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [14%                         ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=15%                        ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=16%                        ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=17%                        ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [==18%                       ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [==19%                       ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [==20%                       ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [==21%                       ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [===22%                      ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [===23%                      ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [===24%                      ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [====25%                     ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [====26%                     ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [====27%                     ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [====28%                     ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=====29%                    ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=====30%                    ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=====31%                    ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=====32%                    ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [======33%                   ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [======34%                   ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [======35%                   ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=======36%                  ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=======37%                  ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=======38%                  ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=======39%                  ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [========40%                 ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [========41%                 ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [========42%                 ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=========43%                ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=========44%                ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=========45%                ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=========46%                ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [==========47%               ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [==========48%               ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [==========49%               ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [===========50%              ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [===========51%              ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [===========52%              ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [===========53%              ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [============54%             ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [============55%             ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [============56%             ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [============57%             ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=============58%            ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=============59%            ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=============60%            ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [==============61%           ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [==============62%           ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [==============63%           ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [==============64%           ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [===============65%          ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [===============66%          ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [===============67%          ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [================68%         ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [================69%         ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [================70%         ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [================71%         ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=================72%        ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=================73%        ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=================74%        ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [==================75%       ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [==================76%       ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [==================77%       ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [==================78%       ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [===================79%      ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [===================80%      ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [===================81%      ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [===================82%      ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [====================83%     ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [====================84%     ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [====================85%     ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=====================86%    ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=====================87%    ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=====================88%    ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=====================89%    ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [======================90%   ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [======================91%   ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [======================92%   ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=======================93%  ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=======================94%  ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=======================95%  ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [=======================96%  ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [========================97% ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [========================98% ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [========================99% ] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [========================100%] nsys_mhc_ubeNV4.1.sqlite[ 2/21] [========================100%] nsys_mhc_ubeNV4.1.sqlite
-[ 3/21] Executing 'nvtx_sum' stats report
 
- Time (%)  Total Time (ns)  Instances   Avg (ns)    Med (ns)   Min (ns)  Max (ns)  StdDev (ns)   Style             Range           
- --------  ---------------  ---------  ----------  ----------  --------  --------  -----------  -------  --------------------------
-    100.0         12813847          1  12813847.0  12813847.0  12813847  12813847          0.0  PushPop  :triton_all_B4_T4096_C4096
-
-[ 4/21] Executing 'cuda_api_sum' stats report
-
- Time (%)  Total Time (ns)  Num Calls  Avg (ns)  Med (ns)  Min (ns)  Max (ns)  StdDev (ns)          Name         
- --------  ---------------  ---------  --------  --------  --------  --------  -----------  ---------------------
-     39.4          1094605        235    4657.9    3779.0      3005     47546       3314.4  cudaLaunchKernel     
-     31.7           879535          1  879535.0  879535.0    879535    879535          0.0  cudaDeviceSynchronize
-     15.2           423263          5   84652.6   14020.0     13606    365025     156739.2  cudaMemcpyAsync      
-     12.1           335611         55    6102.0    4874.0      3440     19119       2772.7  cuLaunchKernelEx     
-      1.1            31086        235     132.3     112.0        89      1375         98.2  cuKernelGetName      
-      0.4             9908          1    9908.0    9908.0      9908      9908          0.0  cuProfilerStart      
-      0.1             2521         10     252.1     209.5       113       605        159.5  cuKernelGetAttribute 
-
-[ 5/21] Executing 'cuda_gpu_kern_sum' stats report
-
- Time (%)  Total Time (ns)  Instances  Avg (ns)  Med (ns)  Min (ns)  Max (ns)  StdDev (ns)                                                  Name                                                
- --------  ---------------  ---------  --------  --------  --------  --------  -----------  ----------------------------------------------------------------------------------------------------
-     36.0          3802454         75   50699.4    1984.0      1280    229407      90167.2  void at::native::vectorized_elementwise_kernel<(int)8, at::native::CUDAFunctor_add<c10::BFloat16>, …
-     16.8          1776219          5  355243.8  355391.0    354527    355551        415.1  _mhc_expand_combine_bwd                                                                             
-     11.2          1180605          5  236121.0  235839.0    233920    239552       2091.1  _mhc_projection_bwd_fused                                                                           
-      9.3           978878          5  195775.6  195775.0    194912    196992        766.3  _mhc_aggregate_bwd                                                                                  
-      8.2           860862          5  172172.4  172223.0    171871    172544        297.5  _mhc_expand_combine_fwd                                                                             
-      5.0           528896          5  105779.2  105632.0    104864    107296       1015.4  _mhc_projection_fwd_fused                                                                           
-      4.7           500894          5  100178.8  100096.0     99839    100480        289.5  _mhc_aggregate_fwd                                                                                  
-      3.7           389726          5   77945.2   77888.0     77791     78144        136.7  nvjet_sm100_tst_128x32_64x10_4x1_2cta_v_bz_NTT                                                      
-      1.0           101568          5   20313.6   20288.0     20128     20608        180.2  _mhc_sinkhorn_bwd_fused_recompute                                                                   
-      0.9            99775         30    3325.8    3824.0      1472      4768       1335.2  void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIterator…
-      0.9            91168         55    1657.6    1664.0      1088      2304        314.8  void at::native::vectorized_elementwise_kernel<(int)8, at::native::bfloat16_copy_kernel_cuda(at::Te…
-      0.7            68928          5   13785.6   13760.0     13632     13952        132.7  _mhc_sinkhorn_fwd_fused_recompute                                                                   
-      0.6            60608         15    4040.5    4000.0      3744      4448        210.7  void at::native::elementwise_kernel<(int)128, (int)4, void at::native::gpu_kernel_impl_nocast<at::n…
-      0.5            50816         45    1129.2    1152.0       672      1568        230.6  void at::native::vectorized_elementwise_kernel<(int)4, at::native::FillFunctor<float>, std::array<c…
-      0.2            22816          5    4563.2    4544.0      4544      4608         28.6  _mhc_scale_bwd_fused                                                                                
-      0.2            19328         15    1288.5    1280.0      1152      1440        102.2  void at::native::vectorized_elementwise_kernel<(int)8, at::native::FillFunctor<c10::BFloat16>, std:…
-      0.1            14816          5    2963.2    2944.0      2912      3040         48.5  _mhc_scale_fwd_fused                                                                                
-
-[ 6/21] Executing 'cuda_gpu_mem_time_sum' stats report
-
- Time (%)  Total Time (ns)  Count  Avg (ns)  Med (ns)  Min (ns)  Max (ns)  StdDev (ns)            Operation           
- --------  ---------------  -----  --------  --------  --------  --------  -----------  ------------------------------
-    100.0             9792      5    1958.4    1952.0      1856      2080         91.6  [CUDA memcpy Device-to-Device]
-
-[ 7/21] Executing 'cuda_gpu_mem_size_sum' stats report
-
- Total (MB)  Count  Avg (MB)  Med (MB)  Min (MB)  Max (MB)  StdDev (MB)            Operation           
- ----------  -----  --------  --------  --------  --------  -----------  ------------------------------
-      2.621      5     0.524     0.524     0.524     0.524        0.000  [CUDA memcpy Device-to-Device]
-
-[ 8/21] [0%                          ] nsys_mhc_ubeNV4.2.nsys-rep[ 8/21] [0%                          ] nsys_mhc_ubeNV4.2.nsys-rep[ 8/21] [==========49%               ] nsys_mhc_ubeNV4.2.nsys-rep[ 8/21] [=======================96%  ] nsys_mhc_ubeNV4.2.nsys-rep[ 8/21] [========================97% ] nsys_mhc_ubeNV4.2.nsys-rep[ 8/21] [========================98% ] nsys_mhc_ubeNV4.2.nsys-rep[ 8/21] [========================100%] nsys_mhc_ubeNV4.2.nsys-rep[ 8/21] [========================100%] nsys_mhc_ubeNV4.2.nsys-rep
-[ 9/21] [0%                          ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [1%                          ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [2%                          ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [3%                          ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [4%                          ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [5%                          ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [6%                          ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [7%                          ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [8%                          ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [9%                          ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [10%                         ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [11%                         ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [12%                         ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [13%                         ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [14%                         ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=15%                        ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=16%                        ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=17%                        ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [==18%                       ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [==19%                       ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [==20%                       ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [==21%                       ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [===22%                      ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [===23%                      ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [===24%                      ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [====25%                     ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [====26%                     ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [====27%                     ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [====28%                     ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=====29%                    ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=====30%                    ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=====31%                    ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=====32%                    ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [======33%                   ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [======34%                   ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [======35%                   ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=======36%                  ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=======37%                  ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=======38%                  ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=======39%                  ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [========40%                 ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [========41%                 ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [========42%                 ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=========43%                ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=========44%                ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=========45%                ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=========46%                ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [==========47%               ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [==========48%               ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [==========49%               ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [===========50%              ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [===========51%              ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [===========52%              ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [===========53%              ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [============54%             ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [============55%             ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [============56%             ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [============57%             ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=============58%            ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=============59%            ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=============60%            ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [==============61%           ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [==============62%           ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [==============63%           ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [==============64%           ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [===============65%          ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [===============66%          ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [===============67%          ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [================68%         ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [================69%         ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [================70%         ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [================71%         ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=================72%        ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=================73%        ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=================74%        ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [==================75%       ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [==================76%       ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [==================77%       ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [==================78%       ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [===================79%      ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [===================80%      ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [===================81%      ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [===================82%      ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [====================83%     ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [====================84%     ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [====================85%     ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=====================86%    ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=====================87%    ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=====================88%    ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=====================89%    ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [======================90%   ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [======================91%   ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [======================92%   ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=======================93%  ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=======================94%  ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=======================95%  ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [=======================96%  ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [========================97% ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [========================98% ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [========================99% ] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [========================100%] nsys_mhc_ubeNV4.2.sqlite[ 9/21] [========================100%] nsys_mhc_ubeNV4.2.sqlite
-SKIPPED: /tmp/nsys_mhc_ubeNV4.2.sqlite does not contain GPU memory data.
-SKIPPED: /tmp/nsys_mhc_ubeNV4.2.sqlite does not contain GPU memory data.
-[10/21] Executing 'nvtx_sum' stats report
-
- Time (%)  Total Time (ns)  Instances   Avg (ns)    Med (ns)   Min (ns)  Max (ns)  StdDev (ns)   Style             Range           
- --------  ---------------  ---------  ----------  ----------  --------  --------  -----------  -------  --------------------------
-    100.0         15725872          1  15725872.0  15725872.0  15725872  15725872          0.0  PushPop  :cutile_all_B4_T4096_C4096
-
-[11/21] Executing 'cuda_api_sum' stats report
-
- Time (%)  Total Time (ns)  Num Calls   Avg (ns)    Med (ns)   Min (ns)  Max (ns)  StdDev (ns)          Name         
- --------  ---------------  ---------  ----------  ----------  --------  --------  -----------  ---------------------
-     94.8         10827476          1  10827476.0  10827476.0  10827476  10827476          0.0  cudaDeviceSynchronize
-      3.3           378000         40      9450.0      7996.5      5719     35901       6006.3  cuLaunchKernel       
-      1.9           215544         45      4789.9      3865.0      3076     19970       3062.0  cudaLaunchKernel     
-      0.0             5655         45       125.7       112.0        95       408         47.5  cuKernelGetName      
-
-[12/21] Executing 'cuda_gpu_kern_sum' stats report
-
- Time (%)  Total Time (ns)  Instances  Avg (ns)  Med (ns)  Min (ns)  Max (ns)  StdDev (ns)                                                  Name                                                
- --------  ---------------  ---------  --------  --------  --------  --------  -----------  ----------------------------------------------------------------------------------------------------
-     32.0          4898735          5  979747.0  979773.0    979612    979837         89.0  _ct_hpb_bwd_kernel                                                                                  
-     24.5          3744788         45   83217.5    2176.0      1760    227999     104195.1  void at::native::vectorized_elementwise_kernel<(int)8, at::native::CUDAFunctor_add<c10::BFloat16>, …
-     11.3          1731962          5  346392.4  346559.0    340831    350431       3587.0  _ct_proj_rms_bwd_kernel                                                                             
-      7.5          1152124          5  230424.8  230271.0    230112    230847        311.2  _ct_sinkhorn_bwd_kernel                                                                             
-      7.1          1079869          5  215973.8  216031.0    215743    216095        136.6  _ct_hpb_fwd_kernel                                                                                  
-      6.9          1049053          5  209810.6  209919.0    209407    210207        368.0  _ct_h_agg_bwd_kernel                                                                                
-      4.1           632542          5  126508.4  126176.0    125408    128447       1240.5  _ct_proj_rms_fwd_kernel                                                                             
-      3.6           543486          5  108697.2  108736.0    108447    108895        184.5  _ct_h_agg_fwd_kernel                                                                                
-      3.1           475677          5   95135.4   95200.0     94655     95455        294.3  _ct_sinkhorn_fwd_kernel                                                                             
-
-[13/21] Executing 'cuda_gpu_mem_time_sum' stats report
-[14/21] Executing 'cuda_gpu_mem_size_sum' stats report
-[15/21] [0%                          ] nsys_mhc_ubeNV4.3.nsys-rep[15/21] [0%                          ] nsys_mhc_ubeNV4.3.nsys-rep[15/21] [==========49%               ] nsys_mhc_ubeNV4.3.nsys-rep[15/21] [=======================95%  ] nsys_mhc_ubeNV4.3.nsys-rep[15/21] [=======================96%  ] nsys_mhc_ubeNV4.3.nsys-rep[15/21] [========================97% ] nsys_mhc_ubeNV4.3.nsys-rep[15/21] [========================100%] nsys_mhc_ubeNV4.3.nsys-rep[15/21] [========================100%] nsys_mhc_ubeNV4.3.nsys-rep
-[16/21] [0%                          ] nsys_mhc_ubeNV4.3.sqlite[16/21] [1%                          ] nsys_mhc_ubeNV4.3.sqlite[16/21] [2%                          ] nsys_mhc_ubeNV4.3.sqlite[16/21] [3%                          ] nsys_mhc_ubeNV4.3.sqlite[16/21] [4%                          ] nsys_mhc_ubeNV4.3.sqlite[16/21] [5%                          ] nsys_mhc_ubeNV4.3.sqlite[16/21] [6%                          ] nsys_mhc_ubeNV4.3.sqlite[16/21] [7%                          ] nsys_mhc_ubeNV4.3.sqlite[16/21] [8%                          ] nsys_mhc_ubeNV4.3.sqlite[16/21] [9%                          ] nsys_mhc_ubeNV4.3.sqlite[16/21] [10%                         ] nsys_mhc_ubeNV4.3.sqlite[16/21] [11%                         ] nsys_mhc_ubeNV4.3.sqlite[16/21] [12%                         ] nsys_mhc_ubeNV4.3.sqlite[16/21] [13%                         ] nsys_mhc_ubeNV4.3.sqlite[16/21] [14%                         ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=15%                        ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=16%                        ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=17%                        ] nsys_mhc_ubeNV4.3.sqlite[16/21] [==18%                       ] nsys_mhc_ubeNV4.3.sqlite[16/21] [==19%                       ] nsys_mhc_ubeNV4.3.sqlite[16/21] [==20%                       ] nsys_mhc_ubeNV4.3.sqlite[16/21] [==21%                       ] nsys_mhc_ubeNV4.3.sqlite[16/21] [===22%                      ] nsys_mhc_ubeNV4.3.sqlite[16/21] [===23%                      ] nsys_mhc_ubeNV4.3.sqlite[16/21] [===24%                      ] nsys_mhc_ubeNV4.3.sqlite[16/21] [====25%                     ] nsys_mhc_ubeNV4.3.sqlite[16/21] [====26%                     ] nsys_mhc_ubeNV4.3.sqlite[16/21] [====27%                     ] nsys_mhc_ubeNV4.3.sqlite[16/21] [====28%                     ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=====29%                    ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=====30%                    ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=====31%                    ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=====32%                    ] nsys_mhc_ubeNV4.3.sqlite[16/21] [======33%                   ] nsys_mhc_ubeNV4.3.sqlite[16/21] [======34%                   ] nsys_mhc_ubeNV4.3.sqlite[16/21] [======35%                   ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=======36%                  ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=======37%                  ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=======38%                  ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=======39%                  ] nsys_mhc_ubeNV4.3.sqlite[16/21] [========40%                 ] nsys_mhc_ubeNV4.3.sqlite[16/21] [========41%                 ] nsys_mhc_ubeNV4.3.sqlite[16/21] [========42%                 ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=========43%                ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=========44%                ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=========45%                ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=========46%                ] nsys_mhc_ubeNV4.3.sqlite[16/21] [==========47%               ] nsys_mhc_ubeNV4.3.sqlite[16/21] [==========48%               ] nsys_mhc_ubeNV4.3.sqlite[16/21] [==========49%               ] nsys_mhc_ubeNV4.3.sqlite[16/21] [===========50%              ] nsys_mhc_ubeNV4.3.sqlite[16/21] [===========51%              ] nsys_mhc_ubeNV4.3.sqlite[16/21] [===========52%              ] nsys_mhc_ubeNV4.3.sqlite[16/21] [===========53%              ] nsys_mhc_ubeNV4.3.sqlite[16/21] [============54%             ] nsys_mhc_ubeNV4.3.sqlite[16/21] [============55%             ] nsys_mhc_ubeNV4.3.sqlite[16/21] [============56%             ] nsys_mhc_ubeNV4.3.sqlite[16/21] [============57%             ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=============58%            ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=============59%            ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=============60%            ] nsys_mhc_ubeNV4.3.sqlite[16/21] [==============61%           ] nsys_mhc_ubeNV4.3.sqlite[16/21] [==============62%           ] nsys_mhc_ubeNV4.3.sqlite[16/21] [==============63%           ] nsys_mhc_ubeNV4.3.sqlite[16/21] [==============64%           ] nsys_mhc_ubeNV4.3.sqlite[16/21] [===============65%          ] nsys_mhc_ubeNV4.3.sqlite[16/21] [===============66%          ] nsys_mhc_ubeNV4.3.sqlite[16/21] [===============67%          ] nsys_mhc_ubeNV4.3.sqlite[16/21] [================68%         ] nsys_mhc_ubeNV4.3.sqlite[16/21] [================69%         ] nsys_mhc_ubeNV4.3.sqlite[16/21] [================70%         ] nsys_mhc_ubeNV4.3.sqlite[16/21] [================71%         ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=================72%        ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=================73%        ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=================74%        ] nsys_mhc_ubeNV4.3.sqlite[16/21] [==================75%       ] nsys_mhc_ubeNV4.3.sqlite[16/21] [==================76%       ] nsys_mhc_ubeNV4.3.sqlite[16/21] [==================77%       ] nsys_mhc_ubeNV4.3.sqlite[16/21] [==================78%       ] nsys_mhc_ubeNV4.3.sqlite[16/21] [===================79%      ] nsys_mhc_ubeNV4.3.sqlite[16/21] [===================80%      ] nsys_mhc_ubeNV4.3.sqlite[16/21] [===================81%      ] nsys_mhc_ubeNV4.3.sqlite[16/21] [===================82%      ] nsys_mhc_ubeNV4.3.sqlite[16/21] [====================83%     ] nsys_mhc_ubeNV4.3.sqlite[16/21] [====================84%     ] nsys_mhc_ubeNV4.3.sqlite[16/21] [====================85%     ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=====================86%    ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=====================87%    ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=====================88%    ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=====================89%    ] nsys_mhc_ubeNV4.3.sqlite[16/21] [======================90%   ] nsys_mhc_ubeNV4.3.sqlite[16/21] [======================91%   ] nsys_mhc_ubeNV4.3.sqlite[16/21] [======================92%   ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=======================93%  ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=======================94%  ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=======================95%  ] nsys_mhc_ubeNV4.3.sqlite[16/21] [=======================96%  ] nsys_mhc_ubeNV4.3.sqlite[16/21] [========================97% ] nsys_mhc_ubeNV4.3.sqlite[16/21] [========================98% ] nsys_mhc_ubeNV4.3.sqlite[16/21] [========================99% ] nsys_mhc_ubeNV4.3.sqlite[16/21] [========================100%] nsys_mhc_ubeNV4.3.sqlite[16/21] [========================100%] nsys_mhc_ubeNV4.3.sqlite
-[17/21] Executing 'nvtx_sum' stats report
-
- Time (%)  Total Time (ns)  Instances   Avg (ns)    Med (ns)   Min (ns)  Max (ns)  StdDev (ns)   Style              Range            
- --------  ---------------  ---------  ----------  ----------  --------  --------  -----------  -------  ----------------------------
-    100.0         20732963          1  20732963.0  20732963.0  20732963  20732963          0.0  PushPop  :tilelang_all_B4_T4096_C4096
-
-[18/21] Executing 'cuda_api_sum' stats report
-
- Time (%)  Total Time (ns)  Num Calls   Avg (ns)    Med (ns)   Min (ns)  Max (ns)  StdDev (ns)           Name         
- --------  ---------------  ---------  ----------  ----------  --------  --------  -----------  ----------------------
-     89.5         10114790          1  10114790.0  10114790.0  10114790  10114790          0.0  cudaDeviceSynchronize 
-      4.9           548903         55      9980.1      9248.0      3576     39535       6477.9  cuLaunchKernel        
-      4.4           497144         95      5233.1      4317.0      3066     21375       2785.9  cudaLaunchKernel      
-      0.6            70204          5     14040.8     13240.0     11193     18929       3030.8  cudaMemcpyAsync       
-      0.5            59246          5     11849.2     11669.0     11474     12708        491.6  cuLaunchKernelEx      
-      0.1            13480         95       141.9       117.0        90       666         79.0  cuKernelGetName       
-      0.0             3504         10       350.4       346.5       131       698        208.8  cuTensorMapEncodeTiled
-
-[19/21] Executing 'cuda_gpu_kern_sum' stats report
-
- Time (%)  Total Time (ns)  Instances  Avg (ns)   Med (ns)   Min (ns)  Max (ns)  StdDev (ns)                                                  Name                                                
- --------  ---------------  ---------  ---------  ---------  --------  --------  -----------  ----------------------------------------------------------------------------------------------------
-     36.8          7362214          5  1472442.8  1472058.0   1470939   1474651       1427.9  _mhc_pre_norm_fn_bwd_mul_kernel_kernel                                                              
-     18.5          3702258         20   185112.9   227375.0     57280    228543      75595.0  void at::native::vectorized_elementwise_kernel<(int)8, at::native::CUDAFunctor_add<c10::BFloat16>, …
-     11.4          2292408          5   458481.6   458367.0    457631    459166        620.4  _mhc_post_bwd_kernel_kernel                                                                         
-      6.8          1359194         10   135919.4   135951.0    135807    136127        108.9  void at::native::vectorized_elementwise_kernel<(int)8, at::native::FillFunctor<c10::BFloat16>, std:…
-      6.4          1279323          5   255864.6   256159.0    254751    256831        977.3  _mhc_pre_apply_mix_bwd_kernel_kernel                                                                
-      6.3          1264795          5   252959.0   251711.0    251327    257919       2795.4  _mhc_pre_norm_fn_fwd_mul_kernel_kernel                                                              
-      4.5           900509          5   180101.8   179999.0    179520    180607        443.2  _mhc_post_fwd_kernel_kernel                                                                         
-      3.7           740796          5   148159.2   148159.0    147359    149152        672.7  mhc_sinkhorn_backward_kernel_kernel                                                                 
-      2.5           504383          5   100876.6   100960.0    100544    101024        201.9  _mhc_pre_apply_mix_fwd_kernel_kernel                                                                
-      1.2           247936          5    49587.2    49312.0     49184     50816        689.2  mhc_sinkhorn_kernel_kernel                                                                          
-      0.4            78463         40     1961.6     2096.0       960      2560        474.6  void at::native::vectorized_elementwise_kernel<(int)4, at::native::CUDAFunctor_add<float>, std::arr…
-      0.3            58048          5    11609.6    11616.0     11552     11680         57.2  void at::native::reduce_kernel<(int)128, (int)4, at::native::ReduceOp<float, at::native::func_wrapp…
-      0.3            56736          5    11347.2    11328.0     11328     11392         28.6  void at::native::reduce_kernel<(int)512, (int)1, at::native::ReduceOp<float, at::native::func_wrapp…
-      0.3            51808          5    10361.6    10336.0     10336     10464         57.2  _mhc_pre_norm_fn_fwd_norm_kernel_kernel                                                             
-      0.3            50528          5    10105.6    10080.0     10048     10176         52.6  _mhc_pre_norm_fn_bwd_norm_kernel_kernel                                                             
-      0.2            34944          5     6988.8     6944.0      6880      7104        107.6  mhc_pre_split_mixes_bwd_kernel_kernel                                                               
-      0.1            23104         10     2310.4     2320.0      2240      2368         44.7  void at::native::vectorized_elementwise_kernel<(int)4, at::native::CUDAFunctorOnSelf_add<int>, std:…
-      0.1            13952          5     2790.4     2784.0      2752      2880         52.6  mhc_pre_split_mixes_fwd_kernel_kernel                                                               
-      0.0             7744          5     1548.8     1504.0      1472      1696         89.4  void at::native::vectorized_elementwise_kernel<(int)4, at::native::FillFunctor<float>, std::array<c…
-
-[20/21] Executing 'cuda_gpu_mem_time_sum' stats report
-
- Time (%)  Total Time (ns)  Count  Avg (ns)  Med (ns)  Min (ns)  Max (ns)  StdDev (ns)            Operation           
- --------  ---------------  -----  --------  --------  --------  --------  -----------  ------------------------------
-    100.0            11328      5    2265.6    2272.0      2240      2304         26.8  [CUDA memcpy Device-to-Device]
-
-[21/21] Executing 'cuda_gpu_mem_size_sum' stats report
-
- Total (MB)  Count  Avg (MB)  Med (MB)  Min (MB)  Max (MB)  StdDev (MB)            Operation           
- ----------  -----  --------  --------  --------  --------  -----------  ------------------------------
-      7.864      5     1.573     1.573     1.573     1.573        0.000  [CUDA memcpy Device-to-Device]
-
+--- framework=triton ---
+Traceback (most recent call last):
+  File "/lustre/fsw/coreai_dlfw_dev/kainingz/home/root/mhc_bench/mhc_bench.py", line 17, in <module>
+    from tilelang_kernels.modeling.mhc.ops.ops import (
+  File "/lustre/fsw/coreai_dlfw_dev/kainingz/home/root/mhc_bench/tilelang_kernels/modeling/mhc/__init__.py", line 1, in <module>
+    from .functional import expand_from_embedding, mhc_head, mhc_pre
+  File "/lustre/fsw/coreai_dlfw_dev/kainingz/home/root/mhc_bench/tilelang_kernels/modeling/mhc/functional.py", line 4, in <module>
+    from .ops.ops.expand import expand_to_mhc
+  File "/lustre/fsw/coreai_dlfw_dev/kainingz/home/root/mhc_bench/tilelang_kernels/modeling/mhc/ops/ops/__init__.py", line 1, in <module>
+    from .expand import expand_to_mhc
+  File "/lustre/fsw/coreai_dlfw_dev/kainingz/home/root/mhc_bench/tilelang_kernels/modeling/mhc/ops/ops/expand.py", line 3, in <module>
+    from tilelang_kernels.expand_kernel import expand_to_mhc_bwd_tl, expand_to_mhc_fwd_tl
+  File "/lustre/fsw/coreai_dlfw_dev/kainingz/home/root/mhc_bench/tilelang_kernels/expand_kernel.py", line 1, in <module>
+    import tilelang
+ModuleNotFoundError: No module named 'tilelang'
+Processing events...
 Generated:
-	/tmp/nsys_mhc_ubeNV4.1.nsys-rep
-	/tmp/nsys_mhc_ubeNV4.1.sqlite
-	/tmp/nsys_mhc_ubeNV4.2.nsys-rep
-	/tmp/nsys_mhc_ubeNV4.2.sqlite
-	/tmp/nsys_mhc_ubeNV4.3.nsys-rep
-	/tmp/nsys_mhc_ubeNV4.3.sqlite
-
+	No reports were generated
